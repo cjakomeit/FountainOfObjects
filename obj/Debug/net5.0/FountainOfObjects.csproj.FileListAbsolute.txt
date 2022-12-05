@@ -1,0 +1,16 @@
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\FountainOfObjects.exe
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\FountainOfObjects.deps.json
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\FountainOfObjects.runtimeconfig.json
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\FountainOfObjects.runtimeconfig.dev.json
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\FountainOfObjects.dll
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\ref\FountainOfObjects.dll
+C:\Users\cjako\source\repos\FountainOfObjects\bin\Debug\net5.0\FountainOfObjects.pdb
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.csproj.AssemblyReference.cache
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.AssemblyInfoInputs.cache
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.AssemblyInfo.cs
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.csproj.CoreCompileInputs.cache
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.dll
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\ref\FountainOfObjects.dll
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.pdb
+C:\Users\cjako\source\repos\FountainOfObjects\obj\Debug\net5.0\FountainOfObjects.genruntimeconfig.cache
