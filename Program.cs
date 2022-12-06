@@ -15,11 +15,13 @@ public static class GameRunner
 
         do
         {
+            player.TriggerMoveCommand(playArea);
 
+            CheckForWin(player, fountain);
         } while (true);
     }
 
-    private static bool CheckForWin(Player player, Fountain fountain) => (player.Coordinates.X == 0 & player.Coordinates.Y == 0) && fountain.Status == true;
+    private static bool CheckForWin(Player player, Fountain fountain) => (player.Coordinates.X == 0 && player.Coordinates.Y == 0) && fountain.Status == true;
 }
 
 public class Player
@@ -32,8 +34,16 @@ public class Player
         Coordinates.Y = 0;
     }
 
-    public void TriggerMoveCommand()
+    private bool VerifyMove(PlayArea playspace)
     {
+        if ((Coordinates.X++ > playspace.GridSize.X || Coordinates.X++ < 0) || (Coordinates.Y++ > playspace.GridSize.X || Coordinates.Y++ < 0))
+            return false;
+
+        return true;
+    }
+
+    public void TriggerMoveCommand(PlayArea playspace)
+    {   
         IMoveCommands command = Console.ReadKey(true).Key switch
         {
             ConsoleKey.NumPad2 => new MoveSouth(),
@@ -43,7 +53,7 @@ public class Player
             _ => new MoveNorth()
         };
 
-        command.Run(this);
+        if(VerifyMove(playspace)) command.Run(this);
     }
 
     public void TriggerFountainToggle(Fountain fountain) => fountain.ToggleStatus();
@@ -56,14 +66,15 @@ public class Player
 public class PlayArea
 {
     public Room[,] Playspace;
-    public (int X, int Y) GridSize { get; set; }
+    public Coordinate GridSize { get; set; } = new();
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
 
     public PlayArea(Fountain fountain)
     {
-        GridSize = (SmallGrid);
+        GridSize.X = SmallGrid.X;
+        GridSize.Y = SmallGrid.Y;
         Playspace = new Room[GridSize.X, GridSize.Y];
 
         // Initializes all of the rooms
@@ -104,14 +115,6 @@ public class Room
     }
 }
 
-public record Communicator
-{
-    public string EmptyRoom { get; } = "There's nothing to sense here.";
-    public string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...damp.";
-    public string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
-
-}
-
 public class Fountain
 {
     public Coordinate Coordinates { get; init; }
@@ -142,6 +145,14 @@ public record Coordinate
         X = x;
         Y = y;
     }
+}
+
+public record Communicator
+{
+    public string EmptyRoom { get; } = "There's nothing to sense here.";
+    public string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...damp.";
+    public string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
+
 }
 
 // Commands //
