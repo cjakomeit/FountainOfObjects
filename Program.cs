@@ -10,15 +10,22 @@ public static class GameRunner
         Fountain fountain = new();
         PlayArea playArea = new(fountain);
         Player player = new();
+        Menu.SetWindowTitle();
 
         playArea.DrawPlayspace();  // Debug tool
 
+        Options userCommand;
+
         do
         {
+            Menu.Display();
+
+            userCommand = Menu.UserChoice();
+
             player.TriggerMoveCommand(playArea);
 
             CheckForWin(player, fountain);
-        } while (true);
+        } while (userCommand != Options.Quit);
     }
 
     private static bool CheckForWin(Player player, Fountain fountain) => (player.Coordinates.X == 0 && player.Coordinates.Y == 0) && fountain.Status == true;
@@ -129,6 +136,55 @@ public class Fountain
     public void ToggleStatus() => Status = !Status;
 }
 
+public class Menu
+{
+    private static readonly string _windowTitle = "Fountain of Objects";
+
+    public static void Display()
+    {
+        Console.WriteLine("\n+---------------------+\n" +
+                          "| Fountain of Objects |\n" +
+                          "+---------------------+\n");
+
+        for (int i = 0; i < Enum.GetNames(typeof(Options)).Length; i++)
+            Console.WriteLine($" {i + 1}: {ConvertOptionToString((Options)i)}");
+    }
+
+    public static Options UserChoice()
+    {
+        while (true)
+        {
+            Console.Write("\nSelect an option by entering the corresponding number: ");
+            byte userInput = Convert.ToByte(Console.ReadLine());
+
+            if (userInput >= 1 && userInput < Enum.GetNames(typeof(Options)).Length + 1)
+                return userInput switch
+                {
+                    (byte)Options.Move + 1 => Options.Move,
+                    (byte)Options.ToggleFountain + 1 => Options.ToggleFountain,
+                    (byte)Options.RepeatInfo + 1 => Options.RepeatInfo,
+                    (byte)Options.Quit + 1 => Options.Quit
+                };
+
+            /* Above is a complex solution that hopefully makes this more adaptable as a single menu class later on.
+             * Essentially I take each enum and cast it to it's integral value and add 1 to match user input. Then
+             * use that casted enum value to point directly to the enum value. Not totally sure about this solution
+             * but looking to the future essentially it would mean just adding whatever enum values and their
+             * associated byte + 1 values to the switch statement, rather than ensuring the index is correct in the array.
+            */
+
+            else Console.WriteLine("Please enter a valid option");
+        }
+
+    }
+
+    public static void SetWindowTitle() => Console.Title = _windowTitle;
+
+    // This takes an enum and gives it a special string to output, rather than the raw enum name, unless the enum name is good enough on its own (ie doesn't have a special case assigned)
+    private static string ConvertOptionToString(Enum optionToConvert) => optionToConvert switch { Options.ToggleFountain => "Toggle Fountain", Options.RepeatInfo => "Repeat Room Info", _ => Convert.ToString(optionToConvert) };
+}
+
+
 public record Coordinate
 {
     public int X { get; set; }
@@ -181,3 +237,5 @@ public class MoveWest : IMoveCommands
 {
     public void Run(Player player) => player.Coordinates.X -= 1;
 }
+
+public enum Options { Move, ToggleFountain, RepeatInfo, Quit}
