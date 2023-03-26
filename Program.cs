@@ -4,9 +4,7 @@
 GameRunner.Run();
 
 /* To Do's
-*       Adjust DrawPlaySpace() to show player and (debug) fountain locations
-*       Adjust DrawPlaySpace() to run at the top of every Run() loop
-*       Consider a better way to validate moves without having to pass PlayArea object to Coordinate object
+*       Implement other menu option methods
 */
 
 public static class GameRunner
@@ -18,17 +16,31 @@ public static class GameRunner
         Player player = new(playArea);
         Menu.SetWindowTitle();
 
-        playArea.DrawPlayspace();  // Debug tool
+        playArea.DrawPlayspace(player);  // Debug tool
 
         Options userCommand;
 
         do
         {
+            playArea.DrawPlayspace(player);
+
             Menu.Display();
 
             userCommand = Menu.UserChoice();
 
-            player.TriggerMoveCommand();
+            switch (userCommand)
+            {
+                case Options.Move:
+                    player.TriggerMoveCommand();
+                    break;
+                case Options.RepeatInfo:  // Needs implemented
+                    break;
+                case Options.ToggleFountain:  // Needs implemented
+                    break;
+                case Options.Quit:
+                    break;
+            }
+            
 
             CheckForWin(player, fountain);
         } while (userCommand != Options.Quit);
@@ -61,14 +73,6 @@ public class Player
         command.Run(this);
     }
 
-    /*private bool VerifyMove(PlayArea playspace)
-    {
-        if ((Coordinates.X++ > playspace.GridSize.X || Coordinates.X++ < 0) || (Coordinates.Y++ > playspace.GridSize.X || Coordinates.Y++ < 0))
-            return false;
-
-        return true;
-    }*/
-
     public void TriggerFountainToggle(Fountain fountain) => fountain.ToggleStatus();
 
     public string GetPlayerInput() => Console.ReadLine().Trim().ToLower();
@@ -78,6 +82,7 @@ public class PlayArea
 {
     public Room[,] Playspace;
     public Coordinate GridSize { get; set; } 
+    private Fountain Fountain { get; init; }
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
@@ -86,6 +91,7 @@ public class PlayArea
     {
         GridSize = new(SmallGrid.X, SmallGrid.Y);
         Playspace = new Room[GridSize.X, GridSize.Y];
+        Fountain = fountain;
 
         // Initializes all of the rooms
         for(int i = 0; i < GridSize.X; i++)
@@ -93,19 +99,30 @@ public class PlayArea
                 Playspace[i,j] = new Room(i, j, fountain);
     }
 
-    public void DrawPlayspace()
+    public void DrawPlayspace(Player character)
     {
-        string GridSquare = "__|";
+        string GridSquare = " _ |";
 
-        Console.WriteLine($" __ __ __ __ ");
+        Console.WriteLine($" ___ ___ ___ ___ ");
 
-        for (int i = 0; i < GridSize.Y; i++)
+        for (int i = 0; i < GridSize.X; i++)
         {
             Console.Write($"|");
 
-            for (int j = 0; j < GridSize.X; j++)
-                Console.Write($"{GridSquare}");
+            for (int j = 0; j < GridSize.Y; j++)
+            {
+                // Draws player character location if conditions are met
+                if (i == character.Coordinates.X && j == character.Coordinates.Y)
+                    Console.Write("_C_|");
 
+                // Draws fountain location if conditions are met (Intended for debug only)
+                else if (i == Fountain.Coordinates.X && j == Fountain.Coordinates.Y)
+                    Console.Write("_F_|");
+
+                // Default state draws a standard GridSquare and defined above
+                else Console.Write($"{GridSquare}");
+            }
+                
             Console.WriteLine();
         }
     }
@@ -148,8 +165,8 @@ public class Menu
                           "| Fountain of Objects |\n" +
                           "+---------------------+\n");
 
-        for (int i = 0; i < Enum.GetNames(typeof(Options)).Length; i++)
-            Console.WriteLine($" {i + 1}: {ConvertOptionToString((Options)i)}");
+        for (int i = 1; i <= Enum.GetNames(typeof(Options)).Length; i++)
+            Console.WriteLine($" {i}: {ConvertOptionToString((Options)i)}");
     }
 
     public static Options UserChoice()
@@ -187,15 +204,17 @@ public class Menu
 }
 
 
-public record Coordinate(int x, int y) 
+public record Coordinate(int x, int y)
 {
     public int X { get; private set; } = x;
     public int Y { get; private set; } = y;
 
     public void Update(int x, int y, PlayArea playspace)
     {
+        Console.WriteLine($"Previous PC pos.: ({X},{Y})");
+        
         // Validates move, then displays an error message and returns if the move is invalid
-        if (InvalidMoveCheck(x, y, playspace))
+        if (InvalidMoveCheck((X+x), (Y+y), playspace))
         {
             Console.WriteLine("Invalid move.");
             return;
@@ -204,10 +223,12 @@ public record Coordinate(int x, int y)
         // Proceeds if the move is determined valid (InvalidMoveCheck returns false)
         X += x;
         Y += y;
+
+        Console.WriteLine($"Current PC pos.: ({X},{Y})");
     }
 
     // If any of the listed conditions are met, the move is considered in invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
-    private bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x > playspace.GridSize.X || y > playspace.GridSize.Y);
+    private bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x >= playspace.GridSize.X || y >= playspace.GridSize.Y);
 }
 
 public static class Communicator
@@ -227,22 +248,22 @@ public interface IMoveCommands
 
 public class MoveNorth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(-1, 0, player.Playspace);
 }
 
 public class MoveSouth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(1, 0, player.Playspace);
 }
 
 public class MoveEast : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(1, 0, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
 }
 
 public class MoveWest : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(-1, 0, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
 public enum Options { Move = 1, ToggleFountain, RepeatInfo, Quit}
