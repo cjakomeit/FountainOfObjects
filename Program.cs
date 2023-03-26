@@ -3,13 +3,19 @@
 // Initializing everything that needs to be spun up at the start
 GameRunner.Run();
 
+/* To Do's
+*       Adjust DrawPlaySpace() to show player and (debug) fountain locations
+*       Adjust DrawPlaySpace() to run at the top of every Run() loop
+*       Consider a better way to validate moves without having to pass PlayArea object to Coordinate object
+*/
+
 public static class GameRunner
 {
     public static void Run()
     {
         Fountain fountain = new();
         PlayArea playArea = new(fountain);
-        Player player = new();
+        Player player = new(playArea);
         Menu.SetWindowTitle();
 
         playArea.DrawPlayspace();  // Debug tool
@@ -22,7 +28,7 @@ public static class GameRunner
 
             userCommand = Menu.UserChoice();
 
-            player.TriggerMoveCommand(playArea);
+            player.TriggerMoveCommand();
 
             CheckForWin(player, fountain);
         } while (userCommand != Options.Quit);
@@ -33,23 +39,15 @@ public static class GameRunner
 
 public class Player
 {
-    public Coordinate Coordinates { get; set; } = new();
+    public Coordinate Coordinates { get; set; } = new(0,0);
+    public PlayArea Playspace { get; init; }
 
-    public Player()
+    public Player(PlayArea playArea)
     {
-        Coordinates.X = 0;
-        Coordinates.Y = 0;
+        Playspace = playArea;
     }
 
-    private bool VerifyMove(PlayArea playspace)
-    {
-        if ((Coordinates.X++ > playspace.GridSize.X || Coordinates.X++ < 0) || (Coordinates.Y++ > playspace.GridSize.X || Coordinates.Y++ < 0))
-            return false;
-
-        return true;
-    }
-
-    public void TriggerMoveCommand(PlayArea playspace)
+    public void TriggerMoveCommand()
     {   
         IMoveCommands command = Console.ReadKey(true).Key switch
         {
@@ -60,12 +58,18 @@ public class Player
             _ => new MoveNorth()
         };
 
-        if(VerifyMove(playspace)) command.Run(this);
+        command.Run(this);
     }
 
-    public void TriggerFountainToggle(Fountain fountain) => fountain.ToggleStatus();
+    /*private bool VerifyMove(PlayArea playspace)
+    {
+        if ((Coordinates.X++ > playspace.GridSize.X || Coordinates.X++ < 0) || (Coordinates.Y++ > playspace.GridSize.X || Coordinates.Y++ < 0))
+            return false;
 
-    //public void Repeat
+        return true;
+    }*/
+
+    public void TriggerFountainToggle(Fountain fountain) => fountain.ToggleStatus();
 
     public string GetPlayerInput() => Console.ReadLine().Trim().ToLower();
 }
@@ -73,15 +77,14 @@ public class Player
 public class PlayArea
 {
     public Room[,] Playspace;
-    public Coordinate GridSize { get; set; } = new();
+    public Coordinate GridSize { get; set; } 
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
 
     public PlayArea(Fountain fountain)
     {
-        GridSize.X = SmallGrid.X;
-        GridSize.Y = SmallGrid.Y;
+        GridSize = new(SmallGrid.X, SmallGrid.Y);
         Playspace = new Room[GridSize.X, GridSize.Y];
 
         // Initializes all of the rooms
@@ -110,13 +113,12 @@ public class PlayArea
 
 public class Room
 {
-    public Coordinate Coordinates { get; set; } = new();
+    public Coordinate Coordinates { get; set; }
     public bool ContainsFountain { get; init; } = false;
 
     public Room(int x, int y, Fountain fountain)
-    {   
-        Coordinates.X = x; //Object refrence not set ot instance of object
-        Coordinates.Y = y;
+    {
+        Coordinates = new(x, y);
 
         if (Coordinates == fountain.Coordinates) ContainsFountain = true;
     }
@@ -160,10 +162,10 @@ public class Menu
             if (userInput >= 1 && userInput < Enum.GetNames(typeof(Options)).Length + 1)
                 return userInput switch
                 {
-                    (byte)Options.Move + 1 => Options.Move,
-                    (byte)Options.ToggleFountain + 1 => Options.ToggleFountain,
-                    (byte)Options.RepeatInfo + 1 => Options.RepeatInfo,
-                    (byte)Options.Quit + 1 => Options.Quit
+                    (byte)Options.Move => Options.Move,
+                    (byte)Options.ToggleFountain => Options.ToggleFountain,
+                    (byte)Options.RepeatInfo=> Options.RepeatInfo,
+                    (byte)Options.Quit => Options.Quit
                 };
 
             /* Above is a complex solution that hopefully makes this more adaptable as a single menu class later on.
@@ -185,29 +187,34 @@ public class Menu
 }
 
 
-public record Coordinate
+public record Coordinate(int x, int y) 
 {
-    public int X { get; set; }
-    public int Y { get; set; }
+    public int X { get; private set; } = x;
+    public int Y { get; private set; } = y;
 
-    public Coordinate()
+    public void Update(int x, int y, PlayArea playspace)
     {
-        X = 0;
-        Y = 0;
+        // Validates move, then displays an error message and returns if the move is invalid
+        if (InvalidMoveCheck(x, y, playspace))
+        {
+            Console.WriteLine("Invalid move.");
+            return;
+        }
+
+        // Proceeds if the move is determined valid (InvalidMoveCheck returns false)
+        X += x;
+        Y += y;
     }
 
-    public Coordinate(int x, int y)
-    {
-        X = x;
-        Y = y;
-    }
+    // If any of the listed conditions are met, the move is considered in invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
+    private bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x > playspace.GridSize.X || y > playspace.GridSize.Y);
 }
 
-public record Communicator
+public static class Communicator
 {
-    public string EmptyRoom { get; } = "There's nothing to sense here.";
-    public string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...damp.";
-    public string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
+    public static string EmptyRoom { get; } = "There's nothing to sense here.";
+    public static string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...damp.";
+    public static string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
 
 }
 
@@ -220,22 +227,22 @@ public interface IMoveCommands
 
 public class MoveNorth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Y -= 1;
+    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
 public class MoveSouth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Y += 1;
+    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
 }
 
 public class MoveEast : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.X += 1;
+    public void Run(Player player) => player.Coordinates.Update(1, 0, player.Playspace);
 }
 
 public class MoveWest : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.X -= 1;
+    public void Run(Player player) => player.Coordinates.Update(-1, 0, player.Playspace);
 }
 
-public enum Options { Move, ToggleFountain, RepeatInfo, Quit}
+public enum Options { Move = 1, ToggleFountain, RepeatInfo, Quit}
