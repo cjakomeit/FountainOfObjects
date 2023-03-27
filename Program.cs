@@ -4,25 +4,35 @@
 GameRunner.Run();
 
 /* To Do's
-*       Implement other menu option methods
+*       Clean up debug outputs
+*       Add text to clarify "Invalid move" and "Not in fountain room, cannot activate"
+*       Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
 */
 
 public static class GameRunner
 {
     public static void Run()
     {
+        // Initializing all necessary game objects for start-up
         Fountain fountain = new();
         PlayArea playArea = new(fountain);
         Player player = new(playArea);
         Menu.SetWindowTitle();
 
-        playArea.DrawPlayspace(player);  // Debug tool
+        // Player intro with game header and intro text describing objective. Waits on the user to press Enter to start.
+        Menu.DrawHeader();
+        Communicator.NarrateIntro();
+        Console.WriteLine("\nPress any key to start...");
+        Console.ReadKey(true);
+        Console.Clear();
 
         Options userCommand;
 
         do
         {
-            playArea.DrawPlayspace(player);
+            playArea.DrawPlayspace(player);  // Debug only
+
+            Communicator.Communicate(player, fountain);
 
             Menu.Display();
 
@@ -33,17 +43,21 @@ public static class GameRunner
                 case Options.Move:
                     player.TriggerMoveCommand();
                     break;
-                case Options.RepeatInfo:  // Needs implemented
-                    break;
-                case Options.ToggleFountain:  // Needs implemented
+                case Options.ToggleFountain:
+                    player.TriggerFountainToggle(fountain);
                     break;
                 case Options.Quit:
                     break;
             }
-            
 
-            CheckForWin(player, fountain);
-        } while (userCommand != Options.Quit);
+            Console.Clear();  // May need to remove this so that players can see error messages
+        } while (userCommand != Options.Quit && !CheckForWin(player, fountain));
+
+        Console.ForegroundColor = ConsoleColor.Magenta;
+        if (CheckForWin(player, fountain)) Console.WriteLine("Congratulations! You won!");
+        else Console.WriteLine("Goodbye o7.");
+
+        Console.ResetColor();
     }
 
     private static bool CheckForWin(Player player, Fountain fountain) => (player.Coordinates.X == 0 && player.Coordinates.Y == 0) && fountain.Status == true;
@@ -73,9 +87,18 @@ public class Player
         command.Run(this);
     }
 
-    public void TriggerFountainToggle(Fountain fountain) => fountain.ToggleStatus();
+    public void TriggerFountainToggle(Fountain fountain)
+    {
+        if (Coordinates.X == fountain.Coordinates.X && Coordinates.Y == fountain.Coordinates.Y)
+        {
+            fountain.ToggleStatus();
+            Console.WriteLine(fountain.ReaderFriendlyStatus());  // Debug only
+        }
+    
+        else Console.WriteLine("You're not in the fountain room!");
+    }
 
-    public string GetPlayerInput() => Console.ReadLine().Trim().ToLower();
+    public static string GetPlayerInput() => Console.ReadLine().Trim().ToLower();
 }
 
 public class PlayArea
@@ -99,7 +122,7 @@ public class PlayArea
                 Playspace[i,j] = new Room(i, j, fountain);
     }
 
-    public void DrawPlayspace(Player character)
+    public void DrawPlayspace(Player player)
     {
         string GridSquare = " _ |";
 
@@ -112,7 +135,7 @@ public class PlayArea
             for (int j = 0; j < GridSize.Y; j++)
             {
                 // Draws player character location if conditions are met
-                if (i == character.Coordinates.X && j == character.Coordinates.Y)
+                if (i == player.Coordinates.X && j == player.Coordinates.Y)
                     Console.Write("_C_|");
 
                 // Draws fountain location if conditions are met (Intended for debug only)
@@ -125,6 +148,17 @@ public class PlayArea
                 
             Console.WriteLine();
         }
+
+        Console.WriteLine();
+    }
+
+    public Room FindCurrentRoom(Player player)
+    {
+        for (int i = 0; i < GridSize.X; i++)
+            for (int j = 0; j < GridSize.Y; j++)
+                if (i == player.Coordinates.X && j == player.Coordinates.Y) return Playspace[i, j];
+        
+        return Playspace[0, 0];
     }
 }
 
@@ -153,6 +187,8 @@ public class Fountain
     }
 
     public void ToggleStatus() => Status = !Status;
+
+    public string ReaderFriendlyStatus() => Status ? "The fountain is now on." : "The fountain is now off.";
 }
 
 public class Menu
@@ -161,10 +197,9 @@ public class Menu
 
     public static void Display()
     {
-        Console.WriteLine("\n+---------------------+\n" +
-                          "| Fountain of Objects |\n" +
-                          "+---------------------+\n");
-
+        // Writing a blank line before starting menu output to guarantee proper spacing.
+        Console.WriteLine();
+        
         for (int i = 1; i <= Enum.GetNames(typeof(Options)).Length; i++)
             Console.WriteLine($" {i}: {ConvertOptionToString((Options)i)}");
     }
@@ -181,7 +216,6 @@ public class Menu
                 {
                     (byte)Options.Move => Options.Move,
                     (byte)Options.ToggleFountain => Options.ToggleFountain,
-                    (byte)Options.RepeatInfo=> Options.RepeatInfo,
                     (byte)Options.Quit => Options.Quit
                 };
 
@@ -199,10 +233,20 @@ public class Menu
 
     public static void SetWindowTitle() => Console.Title = _windowTitle;
 
-    // This takes an enum and gives it a special string to output, rather than the raw enum name, unless the enum name is good enough on its own (ie doesn't have a special case assigned)
-    private static string ConvertOptionToString(Enum optionToConvert) => optionToConvert switch { Options.ToggleFountain => "Toggle Fountain", Options.RepeatInfo => "Repeat Room Info", _ => Convert.ToString(optionToConvert) };
-}
+    public static void DrawHeader()
+    {
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        
+        Console.WriteLine("\n+---------------------+\n" +
+                          "| Fountain of Objects |\n" +
+                          "+---------------------+\n");
 
+        Console.ResetColor();
+    }
+
+    // This takes an enum and gives it a special string to output, rather than the raw enum name, unless the enum name is good enough on its own (ie doesn't have a special case assigned)
+    private static string ConvertOptionToString(Enum optionToConvert) => optionToConvert switch { Options.ToggleFountain => "Toggle Fountain", _ => Convert.ToString(optionToConvert) };
+}
 
 public record Coordinate(int x, int y)
 {
@@ -228,15 +272,97 @@ public record Coordinate(int x, int y)
     }
 
     // If any of the listed conditions are met, the move is considered in invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
-    private bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x >= playspace.GridSize.X || y >= playspace.GridSize.Y);
+    private static bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x >= playspace.GridSize.X || y >= playspace.GridSize.Y);
 }
 
 public static class Communicator
 {
     public static string EmptyRoom { get; } = "There's nothing to sense here.";
-    public static string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...damp.";
+    public static string Entrance { get; } = "Bright light emanates from the cavern's mouth. You're at the entrance.";
+    private static string EntranceClose { get; } = "You can see a faint light reaching out to you from the cavern's entrance.";
+    private static string FountainOffClose { get; } = "You hear distant dribbles. It's getting more humid.";
+    private static string FountainOnClose { get; } = "You hear rushing water. The air is damp and cool.";
+    public static string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...dank.";
     public static string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
+    public static string GameIntro { get; } = "You arrive at the entrance to the cavern which contains the Fountain of Objects. Your goal? To venture inside, find and enable the Fountain, and escape with your life." +
+                                              "\nUse the information your senses provide to guide you to the room in which the Fountain rests.";
+    public static string CurrentRoom(Player player) => $"Current room: ({player.Coordinates.X},{player.Coordinates.Y})";
 
+    public static void Communicate(Player player, Fountain fountain)
+    {
+        /* Color Key:
+         *      Yellow: Player location
+         *      White: Room description text
+         *      Blue: Fountain On text
+         *      Magenta: Narrative text
+         */
+
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine(CurrentRoom(player));
+
+        if (player.Coordinates.X == 0 && player.Coordinates.Y == 0)
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(Entrance);
+        }
+
+        else if ((player.Coordinates.X == 1 && player.Coordinates.Y == 0) || (player.Coordinates.X == 0 && player.Coordinates.Y == 1))
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(EntranceClose);
+        }
+
+        else if (fountain.Status == false && CloseToFountain(player, fountain))
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(FountainOffClose);
+        }
+
+        else if (fountain.Status == true && CloseToFountain(player, fountain))
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine(FountainOnClose);
+        }
+
+        else if ((player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y) && fountain.Status == false)
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(FountainRoomOff);
+        }
+
+        else if ((player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y) && fountain.Status == true)
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine(FountainRoomOn);
+        }
+
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(EmptyRoom);
+        }
+        
+        Console.ResetColor();
+    }
+
+    public static void NarrateIntro()
+    {
+        Console.ForegroundColor = ConsoleColor.Magenta;
+
+        Console.WriteLine(GameIntro);
+
+        Console.ResetColor();
+    }
+
+    // Check if the player is on any tile which is adjancent to the fountain and returns true if they are.
+    private static bool CloseToFountain(Player player, Fountain fountain)
+    {
+        if ((player.Coordinates.X == fountain.Coordinates.X - 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y - 1) ||
+            (player.Coordinates.X == fountain.Coordinates.X + 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y + 1))
+                return true;
+        
+        else return false;
+    }
 }
 
 // Commands //
@@ -266,4 +392,4 @@ public class MoveWest : IMoveCommands
     public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
-public enum Options { Move = 1, ToggleFountain, RepeatInfo, Quit}
+public enum Options { Move = 1, ToggleFountain, Quit}
