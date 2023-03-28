@@ -13,18 +13,19 @@ public static class GameRunner
 {
     public static void Run()
     {
-        // Initializing all necessary game objects for start-up
-        Fountain fountain = new();
-        PlayArea playArea = new(fountain);
-        Player player = new(playArea);
-        Menu.SetWindowTitle();
-
-        // Player intro with game header and intro text describing objective. Waits on the user to press Enter to start.
+        // Player intro with game header and intro text describing objective. 
         Menu.DrawHeader();
         Communicator.NarrateIntro();
-        Console.WriteLine("\nPress any key to start...");
-        Console.ReadKey(true);
+
+        // Waits on user to specify play field before starting.
+        Menu.Display<AreaSize>();
+        AreaSize areaSizeSelect = Menu.UserChoiceAreaSize();
         Console.Clear();
+
+        // Initializing all necessary game objects for start-up
+        PlayArea playArea = new(areaSizeSelect);
+        Player player = new(playArea);
+        Menu.SetWindowTitle();      
 
         Options userCommand;
 
@@ -32,11 +33,11 @@ public static class GameRunner
         {
             playArea.DrawPlayspace(player);  // Debug only
 
-            Communicator.Communicate(player, fountain);
+            Communicator.Communicate(player, playArea.Fountain);
 
-            Menu.Display();
+            Menu.Display<Options>();
 
-            userCommand = Menu.UserChoice();
+            userCommand = Menu.UserChoiceMain();
 
             switch (userCommand)
             {
@@ -44,17 +45,17 @@ public static class GameRunner
                     player.TriggerMoveCommand();
                     break;
                 case Options.ToggleFountain:
-                    player.TriggerFountainToggle(fountain);
+                    player.TriggerFountainToggle(playArea.Fountain);
                     break;
                 case Options.Quit:
                     break;
             }
 
             Console.Clear();  // May need to remove this so that players can see error messages
-        } while (userCommand != Options.Quit && !CheckForWin(player, fountain));
+        } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain));
 
         Console.ForegroundColor = ConsoleColor.Magenta;
-        if (CheckForWin(player, fountain)) Console.WriteLine("Congratulations! You won!");
+        if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
         else Console.WriteLine("Goodbye o7.");
 
         Console.ResetColor();
@@ -90,10 +91,7 @@ public class Player
     public void TriggerFountainToggle(Fountain fountain)
     {
         if (Coordinates.X == fountain.Coordinates.X && Coordinates.Y == fountain.Coordinates.Y)
-        {
             fountain.ToggleStatus();
-            Console.WriteLine(fountain.ReaderFriendlyStatus());  // Debug only
-        }
     
         else Console.WriteLine("You're not in the fountain room!");
     }
@@ -105,28 +103,39 @@ public class PlayArea
 {
     public Room[,] Playspace;
     public Coordinate GridSize { get; set; } 
-    private Fountain Fountain { get; init; }
+    public Fountain Fountain { get; init; }
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
 
-    public PlayArea(Fountain fountain)
+    public PlayArea(AreaSize sizeSelect)
     {
-        GridSize = new(SmallGrid.X, SmallGrid.Y);
+        GridSize = sizeSelect switch
+        {
+            AreaSize.Small => new(SmallGrid.X, SmallGrid.Y),
+            AreaSize.Medium => new(MediumGrid.X, MediumGrid.Y),
+            AreaSize.Large => new(LargeGrid.X, LargeGrid.Y),
+            _ => new(SmallGrid.X, SmallGrid.Y)
+        };
+        
         Playspace = new Room[GridSize.X, GridSize.Y];
-        Fountain = fountain;
+        Fountain = new(this);
 
         // Initializes all of the rooms
         for(int i = 0; i < GridSize.X; i++)
             for (int j = 0; j < GridSize.Y; j++)
-                Playspace[i,j] = new Room(i, j, fountain);
+                Playspace[i,j] = new Room(i, j, Fountain);
     }
 
     public void DrawPlayspace(Player player)
     {
         string GridSquare = " _ |";
+        
+        for(int i = 0; i < GridSize.X; i++)
+            Console.Write(" ___");
+            
 
-        Console.WriteLine($" ___ ___ ___ ___ ");
+        Console.WriteLine();
 
         for (int i = 0; i < GridSize.X; i++)
         {
@@ -180,9 +189,11 @@ public class Fountain
     public Coordinate Coordinates { get; init; }
     public bool Status { get; set; }
 
-    public Fountain()
+    public Fountain(PlayArea playspace)
     {
-        Coordinates = new(0, 2);  // Eventually this will be randomly generated 0-4 for X and Y coords
+        Random randomCoords = new();
+        
+        Coordinates = new(randomCoords.Next(2, playspace.GridSize.X), randomCoords.Next(2, playspace.GridSize.Y));  
         Status = false;  // Always starts with Fountain off
     }
 
@@ -195,16 +206,20 @@ public class Menu
 {
     private static readonly string _windowTitle = "Fountain of Objects";
 
-    public static void Display()
+    // Should review the chapter on generics since I still am struggling to make them work nicely (p. 222)
+    // However, this implementation may be workable to reduce the number of UserChoice() methods I have
+    public static void Display<T>() where T : Enum
     {
-        // Writing a blank line before starting menu output to guarantee proper spacing.
+        string[] optionsToDisplay = Enum.GetNames(typeof(T));
+
+        // Writing a blank line before starting menu output to ensure proper spacing.
         Console.WriteLine();
-        
-        for (int i = 1; i <= Enum.GetNames(typeof(Options)).Length; i++)
-            Console.WriteLine($" {i}: {ConvertOptionToString((Options)i)}");
+
+        for (int i = 0; i < Enum.GetNames(typeof(T)).Length; i++)
+            Console.WriteLine($" {i + 1}: {MakeFriendlyString(optionsToDisplay[i])}"); 
     }
 
-    public static Options UserChoice()
+    public static Options UserChoiceMain()
     {
         while (true)
         {
@@ -224,11 +239,32 @@ public class Menu
              * use that casted enum value to point directly to the enum value. Not totally sure about this solution
              * but looking to the future essentially it would mean just adding whatever enum values and their
              * associated byte + 1 values to the switch statement, rather than ensuring the index is correct in the array.
+             * Potentially consider converting the enum value to string, then comparing to a string entered by a user.
             */
 
             else Console.WriteLine("Please enter a valid option");
         }
 
+    }
+
+    // Basically repeats the method above but for AreaSize instead. Really should simplify this.
+    public static AreaSize UserChoiceAreaSize()
+    {
+        while (true)
+        {
+            Console.Write("\nSelect a play-area size by entering the corresponding number: ");
+            byte userInput = Convert.ToByte(Console.ReadLine());
+
+            if (userInput >= 1 && userInput < Enum.GetNames(typeof(AreaSize)).Length + 1)
+                return userInput switch
+                {
+                    (byte)AreaSize.Small => AreaSize.Small,
+                    (byte)AreaSize.Medium => AreaSize.Medium,
+                    (byte)AreaSize.Large => AreaSize.Large
+                };
+
+            else Console.WriteLine("Please enter a valid option");
+        }
     }
 
     public static void SetWindowTitle() => Console.Title = _windowTitle;
@@ -245,7 +281,7 @@ public class Menu
     }
 
     // This takes an enum and gives it a special string to output, rather than the raw enum name, unless the enum name is good enough on its own (ie doesn't have a special case assigned)
-    private static string ConvertOptionToString(Enum optionToConvert) => optionToConvert switch { Options.ToggleFountain => "Toggle Fountain", _ => Convert.ToString(optionToConvert) };
+    private static string MakeFriendlyString(string optionToConvert) => optionToConvert switch { "ToggleFountain" => "Toggle Fountain", _ => optionToConvert };
 }
 
 public record Coordinate(int x, int y)
@@ -255,8 +291,6 @@ public record Coordinate(int x, int y)
 
     public void Update(int x, int y, PlayArea playspace)
     {
-        Console.WriteLine($"Previous PC pos.: ({X},{Y})");
-        
         // Validates move, then displays an error message and returns if the move is invalid
         if (InvalidMoveCheck((X+x), (Y+y), playspace))
         {
@@ -267,8 +301,6 @@ public record Coordinate(int x, int y)
         // Proceeds if the move is determined valid (InvalidMoveCheck returns false)
         X += x;
         Y += y;
-
-        Console.WriteLine($"Current PC pos.: ({X},{Y})");
     }
 
     // If any of the listed conditions are met, the move is considered in invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
@@ -393,3 +425,4 @@ public class MoveWest : IMoveCommands
 }
 
 public enum Options { Move = 1, ToggleFountain, Quit}
+public enum AreaSize { Small = 1, Medium, Large}
