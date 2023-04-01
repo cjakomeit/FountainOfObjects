@@ -31,7 +31,7 @@ public static class GameRunner
 
         do
         {
-            playArea.DrawPlayspace(player);  // Debug only
+            //playArea.DrawPlayspace(player);  // Debug only
 
             Communicator.Communicate(player, playArea.Fountain);
 
@@ -47,11 +47,13 @@ public static class GameRunner
                 case Options.ToggleFountain:
                     player.TriggerFountainToggle(playArea.Fountain);
                     break;
+                case Options.Help:
+                    Communicator.ShowHelpText();
+                    break;
                 case Options.Quit:
                     break;
             }
 
-            Console.Clear();  // May need to remove this so that players can see error messages
         } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain));
 
         Console.ForegroundColor = ConsoleColor.Magenta;
@@ -78,10 +80,10 @@ public class Player
     {   
         IMoveCommands command = Console.ReadKey(true).Key switch
         {
-            ConsoleKey.NumPad2 => new MoveSouth(),
-            ConsoleKey.NumPad6 => new MoveEast(),
-            ConsoleKey.NumPad8 => new MoveNorth(),
-            ConsoleKey.NumPad4 => new MoveWest(),
+            ConsoleKey.DownArrow => new MoveSouth(),
+            ConsoleKey.RightArrow => new MoveEast(),
+            ConsoleKey.UpArrow => new MoveNorth(),
+            ConsoleKey.LeftArrow => new MoveWest(),
             _ => new MoveNorth()
         };
 
@@ -231,6 +233,7 @@ public class Menu
                 {
                     (byte)Options.Move => Options.Move,
                     (byte)Options.ToggleFountain => Options.ToggleFountain,
+                    (byte)Options.Help => Options.Help,
                     (byte)Options.Quit => Options.Quit
                 };
 
@@ -281,7 +284,7 @@ public class Menu
     }
 
     // This takes an enum and gives it a special string to output, rather than the raw enum name, unless the enum name is good enough on its own (ie doesn't have a special case assigned)
-    private static string MakeFriendlyString(string optionToConvert) => optionToConvert switch { "ToggleFountain" => "Toggle Fountain", _ => optionToConvert };
+    private static string MakeFriendlyString(string optionToConvert) => optionToConvert switch { "ToggleFountain" => "Toggle Fountain", "Small" => "Small (4x4)", "Medium" => "Medium (6x6)", "Large" => "Large (8x8)",_ => optionToConvert };
 }
 
 public record Coordinate(int x, int y)
@@ -291,10 +294,12 @@ public record Coordinate(int x, int y)
 
     public void Update(int x, int y, PlayArea playspace)
     {
-        // Validates move, then displays an error message and returns if the move is invalid
+        // Validates move, then displays an error message and returns if the move is invalid, with red text which is reset before closing out the method
         if (InvalidMoveCheck((X+x), (Y+y), playspace))
         {
+            Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("Invalid move.");
+            Console.ResetColor();
             return;
         }
 
@@ -318,7 +323,12 @@ public static class Communicator
     public static string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
     public static string GameIntro { get; } = "You arrive at the entrance to the cavern which contains the Fountain of Objects. Your goal? To venture inside, find and enable the Fountain, and escape with your life." +
                                               "\nUse the information your senses provide to guide you to the room in which the Fountain rests.";
-    public static string CurrentRoom(Player player) => $"Current room: ({player.Coordinates.X},{player.Coordinates.Y})";
+    public static string HelpText { get; } = "\nHow to Play:\n" +
+                                             "  1. Move: Press the arrow key corresponding to the direction you want to move.\n" +
+                                             "  2. Toggle Fountain: If you're in the Fountain Room, this command toggles the state of the Fountain (On/Off).\n" +
+                                             "  3. Help: Displays details about available commands.\n" +
+                                             "  4. Quit: Quits the game.";
+    public static string CurrentRoom(Player player) => $"\nCurrent room: ({player.Coordinates.X},{player.Coordinates.Y})";
 
     public static void Communicate(Player player, Fountain fountain)
     {
@@ -395,6 +405,8 @@ public static class Communicator
         
         else return false;
     }
+
+    public static void ShowHelpText() => Console.WriteLine(HelpText);
 }
 
 // Commands //
@@ -424,5 +436,5 @@ public class MoveWest : IMoveCommands
     public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
-public enum Options { Move = 1, ToggleFountain, Quit}
+public enum Options { Move = 1, ToggleFountain, Help, Quit}
 public enum AreaSize { Small = 1, Medium, Large}
