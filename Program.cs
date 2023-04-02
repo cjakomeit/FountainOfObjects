@@ -4,9 +4,11 @@
 GameRunner.Run();
 
 /* To Do's
-*       Clean up debug outputs
-*       Add text to clarify "Invalid move" and "Not in fountain room, cannot activate"
 *       Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
+*       To support random pits: 
+*           Need to prevent placing on a randomized fountain
+*           Need to prevent locking player into start (pits on 0,1 && 1,0)
+*           Need to prevent multiple pits on 1 tile
 */
 
 public static class GameRunner
@@ -33,7 +35,7 @@ public static class GameRunner
         {
             //playArea.DrawPlayspace(player);  // Debug only
 
-            Communicator.Communicate(player, playArea.Fountain);
+            Communicator.Communicate(player, playArea);
 
             Menu.Display<Options>();
 
@@ -54,16 +56,18 @@ public static class GameRunner
                     break;
             }
 
-        } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain));
+        } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(player, playArea));
 
         Console.ForegroundColor = ConsoleColor.Magenta;
         if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
-        else Console.WriteLine("Goodbye o7.");
+        else if (CheckForLoss(player, playArea)) Console.WriteLine("Oh no! You fell in a pit and died. GAME OVER");
+        else Console.WriteLine("Thanks for playing!");
 
         Console.ResetColor();
     }
 
-    private static bool CheckForWin(Player player, Fountain fountain) => (player.Coordinates.X == 0 && player.Coordinates.Y == 0) && fountain.Status == true;
+    private static bool CheckForWin(Player player, Fountain fountain) => player.Coordinates.X == 0 && player.Coordinates.Y == 0 && fountain.Status == true;
+    private static bool CheckForLoss(Player player, PlayArea playspace) => playspace.Playspace[player.Coordinates.X, player.Coordinates.Y].ContainsPit == true;
 }
 
 public class Player
@@ -106,6 +110,7 @@ public class PlayArea
     public Room[,] Playspace;
     public Coordinate GridSize { get; set; } 
     public Fountain Fountain { get; init; }
+    public Room[] PitRooms { get; private set; } //= new Room[4];  // Considering implementing a method which determines the array size based on which GridSize player chooses
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
@@ -126,9 +131,43 @@ public class PlayArea
         // Initializes all of the rooms
         for(int i = 0; i < GridSize.X; i++)
             for (int j = 0; j < GridSize.Y; j++)
-                Playspace[i,j] = new Room(i, j, Fountain);
+                Playspace[i,j] = new Room(i, j, Fountain, false);
+
+        // Triggers pit placement after all the rooms are initialized and fountain is assigned its room.
+        // May need some logic to prevent an unplayable start on larger maps (2 pits blocking both of the player's first moves)
+        PlacePits(sizeSelect);
     }
 
+    /// <summary>
+    /// Uses the X property of GridSize property to determine how many rooms get pits. 
+    /// Pits are assigned randomly, only disallowed in the entrance and the fountain room.
+    /// </summary>
+    private void PlacePits(AreaSize sizeSelect)
+    {
+        switch (GridSize.X)
+        {
+            case 4:
+                Playspace[1, 2] = new(1, 2, Fountain, true);
+                PitRooms = new Room[] { Playspace[1, 2] };
+                break;
+            case 6:
+                Playspace[1, 2] = new(1, 2, Fountain, true);
+                Playspace[2, 4] = new(2, 4, Fountain, true);
+                PitRooms = new Room[] { Playspace[1, 2], Playspace[2, 4] };
+                break;
+            case 8:
+                Playspace[1, 2] = new(1, 2, Fountain, true);
+                Playspace[2, 4] = new(2, 4, Fountain, true);
+                Playspace[3, 6] = new(3, 6, Fountain, true);
+                Playspace[2, 7] = new(2, 7, Fountain, true);
+                PitRooms = new Room[] { Playspace[1, 2], Playspace[2, 4], Playspace[3, 6], Playspace[2, 7] };
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Maintained for debug purposes
     public void DrawPlayspace(Player player)
     {
         string GridSquare = " _ |";
@@ -149,6 +188,9 @@ public class PlayArea
                 if (i == player.Coordinates.X && j == player.Coordinates.Y)
                     Console.Write("_C_|");
 
+                else if (Playspace[i, j].ContainsPit == true)
+                    Console.Write("_P_|");
+
                 // Draws fountain location if conditions are met (Intended for debug only)
                 else if (i == Fountain.Coordinates.X && j == Fountain.Coordinates.Y)
                     Console.Write("_F_|");
@@ -162,27 +204,21 @@ public class PlayArea
 
         Console.WriteLine();
     }
-
-    public Room FindCurrentRoom(Player player)
-    {
-        for (int i = 0; i < GridSize.X; i++)
-            for (int j = 0; j < GridSize.Y; j++)
-                if (i == player.Coordinates.X && j == player.Coordinates.Y) return Playspace[i, j];
-        
-        return Playspace[0, 0];
-    }
 }
 
 public class Room
 {
     public Coordinate Coordinates { get; set; }
     public bool ContainsFountain { get; init; } = false;
+    public bool ContainsPit { get; init; } = false;
 
-    public Room(int x, int y, Fountain fountain)
+    public Room(int x, int y, Fountain fountain, bool pitStatus)
     {
         Coordinates = new(x, y);
 
         if (Coordinates == fountain.Coordinates) ContainsFountain = true;
+
+        ContainsPit = pitStatus;
     }
 }
 
@@ -320,7 +356,7 @@ public static class Communicator
     private static string FountainOffClose { get; } = "You hear distant dribbles. It's getting more humid.";
     private static string FountainOnClose { get; } = "You hear rushing water. The air is damp and cool.";
     public static string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...dank.";
-    public static string FountainRoomOn { get; } = "The sound of rushing watern fills the corridor. The Fountain of Objects has been reactivated!";
+    public static string FountainRoomOn { get; } = "The sound of rushing water fills the corridor. The Fountain of Objects has been reactivated!";
     public static string GameIntro { get; } = "You arrive at the entrance to the cavern which contains the Fountain of Objects. Your goal? To venture inside, find and enable the Fountain, and escape with your life." +
                                               "\nUse the information your senses provide to guide you to the room in which the Fountain rests.";
     public static string HelpText { get; } = "\nHow to Play:\n" +
@@ -328,9 +364,10 @@ public static class Communicator
                                              "  2. Toggle Fountain: If you're in the Fountain Room, this command toggles the state of the Fountain (On/Off).\n" +
                                              "  3. Help: Displays details about available commands.\n" +
                                              "  4. Quit: Quits the game.";
+    private static string PitClose { get; } = "You feel a draft. There is a pit in a nearby room.";
     public static string CurrentRoom(Player player) => $"\nCurrent room: ({player.Coordinates.X},{player.Coordinates.Y})";
 
-    public static void Communicate(Player player, Fountain fountain)
+    public static void Communicate(Player player, PlayArea playspace)
     {
         /* Color Key:
          *      Yellow: Player location
@@ -339,45 +376,60 @@ public static class Communicator
          *      Magenta: Narrative text
          */
 
+        // Outputs current Player coordinates
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine(CurrentRoom(player));
 
+        // Entrance room description
         if (player.Coordinates.X == 0 && player.Coordinates.Y == 0)
         {
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(Entrance);
         }
 
+        // Close to Fountain, Fountain Off
+        else if (playspace.Fountain.Status == false && CloseToFountain(player, playspace.Fountain))
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(FountainOffClose);
+        }
+
+        // Close to Fountain, Fountain On
+        else if (playspace.Fountain.Status == true && CloseToFountain(player, playspace.Fountain))
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine(FountainOnClose);
+        }
+
+        // Close to Entrance
         else if ((player.Coordinates.X == 1 && player.Coordinates.Y == 0) || (player.Coordinates.X == 0 && player.Coordinates.Y == 1))
         {
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(EntranceClose);
         }
 
-        else if (fountain.Status == false && CloseToFountain(player, fountain))
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(FountainOffClose);
-        }
-
-        else if (fountain.Status == true && CloseToFountain(player, fountain))
-        {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine(FountainOnClose);
-        }
-
-        else if ((player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y) && fountain.Status == false)
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(FountainRoomOff);
-        }
-
-        else if ((player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y) && fountain.Status == true)
+        // In Fountain Room, Fountain On
+        else if ((player.Coordinates.X == playspace.Fountain.Coordinates.X && player.Coordinates.Y == playspace.Fountain.Coordinates.Y) && playspace.Fountain.Status == true)
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine(FountainRoomOn);
         }
 
+        // In Fountain Room, Fountain Off
+        else if ((player.Coordinates.X == playspace.Fountain.Coordinates.X && player.Coordinates.Y == playspace.Fountain.Coordinates.Y) && playspace.Fountain.Status == false)
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(FountainRoomOff);
+        }
+
+        // Close to Pit description
+        else if (CloseToPit(player, playspace))
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(PitClose);
+        }
+
+        // Default empty room text
         else
         {
             Console.ForegroundColor = ConsoleColor.White;
@@ -396,7 +448,12 @@ public static class Communicator
         Console.ResetColor();
     }
 
-    // Check if the player is on any tile which is adjancent to the fountain and returns true if they are.
+    /// <summary>
+    /// Check if the player is on any tile which is adjancent to the fountain and returns true if they are.
+    /// </summary>
+    /// <param name="player">Player</param>
+    /// <param name="fountain">Fountain</param>
+    /// <returns>bool</returns>
     private static bool CloseToFountain(Player player, Fountain fountain)
     {
         if ((player.Coordinates.X == fountain.Coordinates.X - 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y - 1) ||
@@ -406,10 +463,30 @@ public static class Communicator
         else return false;
     }
 
+    /// <summary>
+    /// Looks at all the possible locations where a pit could be adjacent to a player, returning true if there is a pit in any of the 8 rooms surrounding the player.
+    /// Ignores current room's coordinates since player would have already lost.
+    /// </summary>
+    /// <param name="player">Player</param>
+    /// <param name="playspace">PlayArea</param>
+    /// <returns>bool</returns>
+    private static bool CloseToPit(Player player, PlayArea playspace)
+    {
+        // Eyes out for a way to optimize this ungodly if-block
+        foreach(Room room in playspace.PitRooms)
+            if ((player.Coordinates.X == room.Coordinates.X + 1 && player.Coordinates.Y == room.Coordinates.Y + 1) || (player.Coordinates.X == room.Coordinates.X - 1 && player.Coordinates.Y == room.Coordinates.Y - 1) ||  // X AND Y
+                (player.Coordinates.X == room.Coordinates.X - 1 && player.Coordinates.Y == room.Coordinates.Y + 1) || (player.Coordinates.X == room.Coordinates.X + 1 && player.Coordinates.Y == room.Coordinates.Y - 1) ||  // X XOR Y
+                (player.Coordinates.X == room.Coordinates.X && player.Coordinates.Y == room.Coordinates.Y + 1)     || (player.Coordinates.X == room.Coordinates.X && player.Coordinates.Y == room.Coordinates.Y - 1)     ||  // +Y OR -Y
+                (player.Coordinates.X == room.Coordinates.X + 1 && player.Coordinates.Y == room.Coordinates.Y)     || (player.Coordinates.X == room.Coordinates.X - 1 && player.Coordinates.Y == room.Coordinates.Y))        // +X OR -X
+                return true;
+
+        return false;
+    }
+
     public static void ShowHelpText() => Console.WriteLine(HelpText);
 }
 
-// Commands //
+// Player Commands //
 
 public interface IMoveCommands
 {
