@@ -144,26 +144,35 @@ public class PlayArea
     /// </summary>
     private void PlacePits(AreaSize sizeSelect)
     {
-        switch (GridSize.X)
+        // Initialize random number generation
+        Random randomNum = new();
+
+        // Takes user-selected PlayArea size and determines the number of pits to place with some arithmetic (Total grid area divided by double of X-axis length)
+        int numberOfPits = sizeSelect switch
         {
-            case 4:
-                Playspace[1, 2] = new(1, 2, Fountain, true);
-                PitRooms = new Room[] { Playspace[1, 2] };
-                break;
-            case 6:
-                Playspace[1, 2] = new(1, 2, Fountain, true);
-                Playspace[2, 4] = new(2, 4, Fountain, true);
-                PitRooms = new Room[] { Playspace[1, 2], Playspace[2, 4] };
-                break;
-            case 8:
-                Playspace[1, 2] = new(1, 2, Fountain, true);
-                Playspace[2, 4] = new(2, 4, Fountain, true);
-                Playspace[3, 6] = new(3, 6, Fountain, true);
-                Playspace[2, 7] = new(2, 7, Fountain, true);
-                PitRooms = new Room[] { Playspace[1, 2], Playspace[2, 4], Playspace[3, 6], Playspace[2, 7] };
-                break;
-            default:
-                break;
+            AreaSize.Small => 1,
+            AreaSize.Medium => (MediumGrid.X * MediumGrid.Y) / (MediumGrid.X * 2),
+            AreaSize.Large => (LargeGrid.X * LargeGrid.Y) / (LargeGrid.X * 2),
+            _ => 1
+        };
+
+        // Initializing PitRooms with a new array of size numberOfPits
+        PitRooms = new Room[numberOfPits];
+
+        // Loops for numberOfPits to create all the pit rooms and assign them to PitRooms[]
+        for (int i = 0; i < numberOfPits; i++)
+        {
+            (int x, int y) tempCoords = (randomNum.Next(2, GridSize.X), randomNum.Next(2, GridSize.Y));
+
+            // Preventing the pit from being placed in the fountain room
+            while(tempCoords.x == Fountain.Coordinates.X && tempCoords.y == Fountain.Coordinates.Y) 
+                tempCoords = (randomNum.Next(2, GridSize.X), randomNum.Next(2, GridSize.Y));
+
+            //Console.WriteLine($"Assigning pit #{i} to ({tempCoords.x},{tempCoords.y})");  // Debug only
+
+            PitRooms[i] = new(tempCoords.x, tempCoords.y, Fountain, true);
+
+            Playspace[PitRooms[i].Coordinates.X, PitRooms[i].Coordinates.Y] = PitRooms[i];
         }
     }
 
@@ -171,11 +180,15 @@ public class PlayArea
     public void DrawPlayspace(Player player)
     {
         string GridSquare = " _ |";
-        
-        for(int i = 0; i < GridSize.X; i++)
+
+        // Making sure the grid is pushed onto its own line
+        Console.WriteLine();
+
+        // Draws top of grid squares
+        for (int i = 0; i < GridSize.X; i++)
             Console.Write(" ___");
             
-
+        // Line break to start drawing actual play space
         Console.WriteLine();
 
         for (int i = 0; i < GridSize.X; i++)
@@ -198,10 +211,19 @@ public class PlayArea
                 // Default state draws a standard GridSquare and defined above
                 else Console.Write($"{GridSquare}");
             }
-                
+
+            // Drawing X coordinate grid along right side
+            Console.Write($" {i}");
+
+            // Pushing to new row
             Console.WriteLine();
         }
 
+        // Draws Y coordinate grid along bottom
+        for (int i = 0; i < GridSize.X; i++)
+            Console.Write($"  {i} ");
+
+        // Adding a line break to clean up before any other displays
         Console.WriteLine();
     }
 }
