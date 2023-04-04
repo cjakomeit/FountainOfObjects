@@ -5,6 +5,7 @@ GameRunner.Run();
 
 /* To Do's
 *       Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
+*       Add help text once all expansions are added
 */
 
 public static class GameRunner
@@ -160,7 +161,7 @@ public class PlayArea
         // Takes user-selected PlayArea size and determines the number of pits to place with some arithmetic (Total grid area divided by double of X-axis length)
         int numberOfPits = sizeSelect switch
         {
-            AreaSize.Small => 1,
+            AreaSize.Small => (SmallGrid.X * SmallGrid.Y) / (SmallGrid.X * 2),
             AreaSize.Medium => (MediumGrid.X * MediumGrid.Y) / (MediumGrid.X * 2),
             AreaSize.Large => (LargeGrid.X * LargeGrid.Y) / (LargeGrid.X * 2),
             _ => 1
