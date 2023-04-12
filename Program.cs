@@ -6,9 +6,15 @@ GameRunner.Run();
 /* To Do's
 *       Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
 *       Add help text once all expansions are added
-*       Maelstroms need collision with player
-*       Maelstroms need to move themselves after collision
+*       Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
+*       Maelstroms should call TriggerPlayerMove() on collision with Player
 *       On move, Maelstroms and Player need to stay with PlayArea bounds (should already be handled by Coordinates.Update())
+*       GameRunner.CheckForLoss() will need to be updated to handle multiple hazards
+*       Consider implementing a base class or interface Hazard which the implements Pits, Maelstroms, and Amaroks
+*           Maelstrom implemented, seems like it's working
+*           Pits needs to be updated to use Hazard framework
+*           Amaroks still need to be added
+*       Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
 */
 
 public static class GameRunner
@@ -211,6 +217,7 @@ public class PlayArea
     {
         int numberOfHazards;
 
+        // Is there a better, cleaner way to track the values associated with arena size?
         if (typeof(T) == typeof(Maelstrom))
         {
             numberOfHazards = sizeSelect switch
@@ -224,7 +231,7 @@ public class PlayArea
             Maelstroms = new Maelstrom[numberOfHazards];
 
             for (int i = 0; i < Maelstroms.Length; i++)
-                Maelstroms[i] = new(Fountain, this);
+                Maelstroms[i] = new(this);
 
             for(int i = 0; i < Maelstroms.Length; i++)
                 Playspace[Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y] = new(Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y, false, true);
@@ -417,44 +424,6 @@ public class Fountain
     public void ToggleStatus() => Status = !Status;
 
     public string ReaderFriendlyStatus() => Status ? "The fountain is now on." : "The fountain is now off.";
-}
-
-public class Maelstrom
-{
-    public Coordinate Coordinates { get; private set; }
-    private IMoveCommands[] ThrowPlayerDirections { get; } = new IMoveCommands[] { new MoveNorth(), new MoveWest(), new MoveWest() };  // Allows Maelstrom displacement directions to be changed easily
-
-    public Maelstrom(Fountain fountain, PlayArea playspace) 
-    {
-        // Using same logic from pits to check that maelstrom doesn't overlap fountain
-        Random randCoordGeneration = new();
-
-        (int x, int y) tempCoords = (randCoordGeneration.Next(1, playspace.GridSize.X), randCoordGeneration.Next(1, playspace.GridSize.Y));
-
-        while(tempCoords.x == fountain.Coordinates.X && tempCoords.y == fountain.Coordinates.Y)
-            tempCoords = (randCoordGeneration.Next(1, playspace.GridSize.X), randCoordGeneration.Next(1, playspace.GridSize.Y));
-
-        Coordinates = new(tempCoords.x, tempCoords.y);
-    }
-
-    public void TriggerMovePlayer(Player player)
-    {
-        foreach (IMoveCommands move in ThrowPlayerDirections)
-            player.TriggerMoveCommand(move);
-    }
-
-    public void Move(Fountain fountain, PlayArea playspace)
-    {
-        // Using same logic from pits to check that maelstrom doesn't overlap fountain
-        Random randCoordGeneration = new();
-
-        (int x, int y) tempCoords = (randCoordGeneration.Next(1, playspace.GridSize.X), randCoordGeneration.Next(1, playspace.GridSize.Y));
-
-        while (tempCoords.x == fountain.Coordinates.X && tempCoords.y == fountain.Coordinates.Y)
-            tempCoords = (randCoordGeneration.Next(1, playspace.GridSize.X), randCoordGeneration.Next(1, playspace.GridSize.Y));
-
-        Coordinates.Update(tempCoords.x, tempCoords.y, playspace);
-    }
 }
 
 public class Menu
@@ -701,6 +670,78 @@ public static class Communicator
     }
 
     public static void ShowHelpText() => Console.WriteLine(HelpText);
+}
+
+// Hazards //
+
+public class Hazard
+{
+    public Coordinate Coordinates { get; protected set; }
+    public PlayArea Playspace { get; protected set; }
+
+    public Hazard(PlayArea playspace)
+    {
+        Playspace = playspace;
+    }
+
+    protected bool CheckPlayerCollision(Player player) => player.Coordinates.X == Coordinates.X && player.Coordinates.Y == player.Coordinates.Y;
+
+    protected bool ValidateHazardPlacement<T>((int x, int y) coords)
+    {
+        // Guard statement to immediately return a false result if coordinates match Fountain's coordinates
+        if (coords.x == Playspace.Fountain.Coordinates.X && coords.y == Playspace.Fountain.Coordinates.Y) return false;
+        
+        // Checks by type and sorts through the associated container of hazards
+        if (typeof(T) == typeof(Maelstrom))
+             foreach(Maelstrom comparisonHazard in Playspace.Maelstroms)
+                if (comparisonHazard != null && (coords.x == comparisonHazard.Coordinates.X && coords.y == comparisonHazard.Coordinates.Y))
+                    return false;
+
+        return true;
+    }
+
+    protected Coordinate GenerateValidRandomCoords<T>()
+    {
+        // Using same logic from pits to check that maelstrom doesn't overlap fountain
+        Random randCoordGeneration = new();
+
+        (int x, int y) tempCoords = (randCoordGeneration.Next(1, Playspace.GridSize.X), randCoordGeneration.Next(1, Playspace.GridSize.Y));
+
+        // Continues to generate coordinates until the hazard is not placed on another hazard nor in the fountain room
+        while (!ValidateHazardPlacement<T>(tempCoords))
+            while (tempCoords.x == Playspace.Fountain.Coordinates.X && tempCoords.y == Playspace.Fountain.Coordinates.Y)
+                tempCoords = (randCoordGeneration.Next(1, Playspace.GridSize.X), randCoordGeneration.Next(1, Playspace.GridSize.Y));
+
+        return new(tempCoords.x, tempCoords.y);
+    }
+
+    protected void UpdateHazardCoordinates(int x, int y) => Coordinates.Update(x, y, Playspace);
+}
+
+public class Maelstrom : Hazard
+{
+    private IMoveCommands[] ThrowPlayerDirections { get; } = new IMoveCommands[] { new MoveNorth(), new MoveWest(), new MoveWest() };  // Allows Maelstrom displacement directions to be changed easily
+
+    public Maelstrom(PlayArea playspace) : base(playspace) 
+    {
+        Coordinates = GenerateValidRandomCoords<Maelstrom>();
+    }
+
+    public void TriggerMovePlayer(Player player)
+    {
+        foreach (IMoveCommands move in ThrowPlayerDirections)
+            player.TriggerMoveCommand(move);
+
+        // Maelstrom should always move after moving a player
+        Move();
+    }
+
+    public void Move()
+    {
+        Coordinate newCoords = GenerateValidRandomCoords<Maelstrom>();
+
+        Coordinates.Update(newCoords.x, newCoords.y, Playspace);
+    }
 }
 
 // Player Commands //
