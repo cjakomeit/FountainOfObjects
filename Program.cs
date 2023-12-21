@@ -12,9 +12,10 @@ GameRunner.Run();
 *       GameRunner.CheckForLoss() will need to be updated to handle multiple hazards
 *       Consider implementing a base class or interface Hazard which the implements Pits, Maelstroms, and Amaroks
 *           Maelstrom implemented, seems like it's working
-*           Pits needs to be updated to use Hazard framework
-*           Amaroks still need to be added
+*           Pits needs to be updated to use Hazard framework (created framework)
+*           Amaroks still need to be added (Framework added)
 *       Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
+*       Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background? 
 */
 
 public static class GameRunner
@@ -62,9 +63,16 @@ public static class GameRunner
                     break;
             }
 
+            Console.WriteLine($"Player coords before move: ({player.Coordinates.X},{player.Coordinates.Y})");
+
+            playArea.HazaradCollisionCheck<Maelstrom>(player);
+
+            Console.WriteLine($"Player coords after move: ({player.Coordinates.X},{player.Coordinates.Y})");
+
         } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(player, playArea));
 
         Console.ForegroundColor = ConsoleColor.Magenta;
+
         if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
         else if (CheckForLoss(player, playArea)) Console.WriteLine("Oh no! You fell in a pit and died. GAME OVER");
         else Console.WriteLine("Thanks for playing!");
@@ -121,8 +129,10 @@ public class Player
     {
         if (Coordinates.X == fountain.Coordinates.X && Coordinates.Y == fountain.Coordinates.Y)
             fountain.ToggleStatus();
-    
-        else Console.WriteLine("You're not in the fountain room!");
+
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("You're not in the fountain room!");
+        Console.ResetColor();
     }
 
     public static string GetPlayerInput() => Console.ReadLine().Trim().ToLower();
@@ -162,6 +172,22 @@ public class PlayArea
 
         // Triggers creation of maelstrom(s)
         CreateHazards<Maelstrom>(sizeSelect);
+    }
+
+    public bool HazaradCollisionCheck<T>(Player player)
+    {
+        if (typeof(T) == typeof(Maelstrom))
+        {
+            foreach (Maelstrom maelstrom in Maelstroms)
+                if (maelstrom.CheckPlayerCollision(player))
+                {
+                    maelstrom.TriggerMovePlayer(player);
+
+                    return true;
+                }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -520,7 +546,7 @@ public record Coordinate(int x, int y)
         if (InvalidMoveCheck((X+x), (Y+y), playspace))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Invalid move.");
+            Console.WriteLine($"Invalid move. ({x},{y})");
             Console.ResetColor();
             return;
         }
@@ -684,7 +710,7 @@ public class Hazard
         Playspace = playspace;
     }
 
-    protected bool CheckPlayerCollision(Player player) => player.Coordinates.X == Coordinates.X && player.Coordinates.Y == player.Coordinates.Y;
+    public bool CheckPlayerCollision(Player player) => player.Coordinates.X == Coordinates.X && player.Coordinates.Y == Coordinates.Y;
 
     protected bool ValidateHazardPlacement<T>((int x, int y) coords)
     {
@@ -718,6 +744,16 @@ public class Hazard
     protected void UpdateHazardCoordinates(int x, int y) => Coordinates.Update(x, y, Playspace);
 }
 
+public class Pit : Hazard
+{
+    public Pit(PlayArea playspace) : base(playspace)
+    {
+        Coordinates = GenerateValidRandomCoords<Pit>();
+    }
+
+
+}
+
 public class Maelstrom : Hazard
 {
     private IMoveCommands[] ThrowPlayerDirections { get; } = new IMoveCommands[] { new MoveNorth(), new MoveWest(), new MoveWest() };  // Allows Maelstrom displacement directions to be changed easily
@@ -730,19 +766,37 @@ public class Maelstrom : Hazard
     public void TriggerMovePlayer(Player player)
     {
         foreach (IMoveCommands move in ThrowPlayerDirections)
+        {
+            Console.WriteLine($"Triggering player mover: {move}");  // Debug only
+            
             player.TriggerMoveCommand(move);
 
-        // Maelstrom should always move after moving a player
+            Console.WriteLine($"{move} complete");  // Debug only
+        }
+
+        // Maelstrom should always move after moving a player (Isn't triggering, see comment in Move() below)
         Move();
     }
 
-    public void Move()
+    // Currently not working, throwing an invalid move when attempting to update coordinates. Need to determine if newCoords is providing a bogus value,
+    // or if there's something in Coordinates.Update() that would cause it to refect newCoords values
+    private void Move()
     {
         Coordinate newCoords = GenerateValidRandomCoords<Maelstrom>();
 
+        Console.WriteLine($"New coordinates for maelstrom generated: ({newCoords.x},{newCoords.y})");
+
+
+        // This is returning an invalid move if the maelstrom is on the edge of the arena
         Coordinates.Update(newCoords.x, newCoords.y, Playspace);
     }
 }
+
+/*public class Amarok : Hazard
+{ 
+
+}*/
+
 
 // Player Commands //
 
