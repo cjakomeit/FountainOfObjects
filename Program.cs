@@ -10,12 +10,14 @@ GameRunner.Run();
 *       Maelstroms should call TriggerPlayerMove() on collision with Player
 *       On move, Maelstroms and Player need to stay with PlayArea bounds (should already be handled by Coordinates.Update())
 *       GameRunner.CheckForLoss() will need to be updated to handle multiple hazards
+*           Need to add a loss condition for colliding with an Amarok
 *       Consider implementing a base class or interface Hazard which the implements Pits, Maelstroms, and Amaroks
-*           Maelstrom implemented, seems like it's working
+*           PlayArea.CreateHazards needs to be updated to create Pits
+*           Maelstrom implemented, needs testing
+*               Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background? 
 *           Pits needs to be updated to use Hazard framework (created framework)
-*           Amaroks still need to be added (Framework added)
+*           Amaroks still need to be added (created framework)
 *       Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
-*       Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background? 
 */
 
 public static class GameRunner
@@ -187,6 +189,13 @@ public class PlayArea
                 }
         }
 
+        else if (typeof(T) == typeof(Pit))
+        {
+            //foreach (Room pitRoom in PitRooms)
+                // ???
+
+        }
+
         return false;
     }
 
@@ -233,7 +242,7 @@ public class PlayArea
     }
 
     /// <summary>
-    /// Takes a hazard type (Maelstrom, Amarok) and determines how many of the hazard should be created based on GridSize.
+    /// Takes a hazard type (Pit, Maelstrom, Amarok) and determines how many of the hazard should be created based on GridSize.
     /// Then runs through the number of hazards required and initializes them. Additionally the Rooms in Playspace[] are updated
     /// to contain the Rooms with hazards.
     /// </summary>
@@ -243,7 +252,7 @@ public class PlayArea
     {
         int numberOfHazards;
 
-        // Is there a better, cleaner way to track the values associated with arena size?
+        // Is there a better, cleaner way to track the values associated with arena size? (Dictionary maybe?)
         if (typeof(T) == typeof(Maelstrom))
         {
             numberOfHazards = sizeSelect switch
