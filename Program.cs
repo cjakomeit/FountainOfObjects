@@ -4,20 +4,23 @@
 GameRunner.Run();
 
 /* To Do's
-*       Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
-*       Add help text once all expansions are added
-*       Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
-*       Maelstroms should call TriggerPlayerMove() on collision with Player
-*       On move, Maelstroms and Player need to stay with PlayArea bounds (should already be handled by Coordinates.Update())
-*       GameRunner.CheckForLoss() will need to be updated to handle multiple hazards
-*           Need to add a loss condition for colliding with an Amarok
-*       Consider implementing a base class or interface Hazard which the implements Pits, Maelstroms, and Amaroks
+*       High Priority:
+*           Maelstroms should call TriggerPlayerMove() on collision with Player
+*           GameRunner.CheckForLoss() will need to be updated to handle multiple hazards
+*               Need to add a loss condition for colliding with an Amarok
+*           Consider implementing a base class or interface Hazard which the implements Pits, Maelstroms, and Amaroks
 *           PlayArea.CreateHazards needs to be updated to create Pits
-*           Maelstrom implemented, needs testing
-*               Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background? 
+*           On move, Maelstroms and Player need to stay with PlayArea bounds (should already be handled by Coordinates.Update())
 *           Pits needs to be updated to use Hazard framework (created framework)
 *           Amaroks still need to be added (created framework)
-*       Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
+*       Medium Priority:
+*           Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
+*           Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
+*           Maelstrom implemented, needs testing
+*               Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background?
+*       Low Priority:
+*           Add help text once all expansions are added
+*           Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.       
 */
 
 public static class GameRunner
@@ -42,8 +45,10 @@ public static class GameRunner
 
         do
         {
-            playArea.DrawPlayspace(player);  // Debug only
+            playArea.FindCurrentRoom(player);
 
+            playArea.DrawPlayspace(player);  // Debug only
+            
             Communicator.Communicate(player, playArea);
 
             Menu.Display<Options>();
@@ -142,6 +147,7 @@ public class Player
 
 public class PlayArea
 {
+    public Room CurrentRoom { get; private set; }
     public Room[,] Playspace;
     public Coordinate GridSize { get; set; } 
     public Fountain Fountain { get; init; }
@@ -174,6 +180,23 @@ public class PlayArea
 
         // Triggers creation of maelstrom(s)
         CreateHazards<Maelstrom>(sizeSelect);
+    }
+
+    /// <summary>
+    /// Parses through Playspace[] until a room matches the coordinates of the Player, 
+    /// then assigns the room from Playspace[] to CurrentRoom and breaks, else continues.
+    /// </summary>
+    /// <param name="player"></param>
+    public void FindCurrentRoom(Player player)
+    {
+        foreach(Room room in Playspace)
+        {
+            if (room.Coordinates.X == player.Coordinates.X && room.Coordinates.Y == player.Coordinates.X)
+            {
+                CurrentRoom = Playspace[room.Coordinates.X, room.Coordinates.Y];
+                break;
+            }    
+        }
     }
 
     public bool HazaradCollisionCheck<T>(Player player)
@@ -399,6 +422,9 @@ public class PlayArea
         for (int i = 0; i < GridSize.X; i++)
             Console.Write($"  {i} ");
 
+        // Displays what the current room is (to test CurrentRoom is correctly assigned)
+        Console.Write($"\nCurrent Room: ({CurrentRoom.Coordinates.X},{CurrentRoom.Coordinates.Y})\n");
+
         // Adding a line break to clean up before any other displays
         Console.WriteLine();
     }
@@ -407,6 +433,7 @@ public class PlayArea
 public class Room
 {
     public Coordinate Coordinates { get; set; }
+    public Hazard Hazard { get; private set; }
     public bool ContainsFountain { get; init; } = false;
     public bool ContainsPit { get; init; } = false;
     public bool ContainsMaelstrom { get; init; } = false;
@@ -441,6 +468,8 @@ public class Room
 
         ContainsMaelstrom = maelstromStatus;
     }
+
+    public bool HasHazard() => Hazard != null;
 }
 
 public class Fountain
