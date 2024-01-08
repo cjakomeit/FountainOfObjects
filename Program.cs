@@ -5,7 +5,7 @@ GameRunner.Run();
 
 /* To Do's
 *       High Priority:
-*           All hazards fail to trigger a consequence when a player is in their room
+*           Every hazard behaves as a Maelstrom
 *       Medium Priority:
 *           Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
 *           Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
@@ -38,10 +38,12 @@ public static class GameRunner
 
         do
         {
+            // Defining CurrentRoom on outset of loop
             playArea.FindCurrentRoom(player);
 
             playArea.DrawPlayspace(player);  // Debug only
-            
+
+            // Gives player details on the room they're currently in            
             Communicator.Communicate(player, playArea);
 
             Menu.Display<Options>();
@@ -52,6 +54,7 @@ public static class GameRunner
             {
                 case Options.Move:
                     player.TriggerMoveCommand();
+                    playArea.FindCurrentRoom(player);
                     break;
                 case Options.ToggleFountain:
                     player.TriggerFountainToggle(playArea.Fountain);
@@ -67,6 +70,7 @@ public static class GameRunner
 
             // If the player's current room contains a hazard and it is of type Maelstrom, then run logic to move player
             // This is probably overly complicated
+            // It is, and it's not working right away
             if(playArea.CurrentRoom.HasHazard() && playArea.CurrentRoom.HazardType == typeof(Maelstrom))
                 playArea.MaelstromCollision(player);
             
@@ -160,6 +164,7 @@ public class PlayArea
     public Coordinate GridSize { get; set; } 
     public Fountain Fountain { get; init; }
     // Are all the arrays of hazards necessary if I'm using Room.HasHazard and casting the correct type for Room.Hazard when I need to use them?
+    // These arrays are referenced frequently so seems I should maintain them. They don't seem to affect memory heavily. 
     public Pit[] Pits { get; private set; }
     public Maelstrom[] Maelstroms { get; private set; }
     public Amarok[] Amaroks { get; private set; }
@@ -185,7 +190,7 @@ public class PlayArea
             for (int j = 0; j < GridSize.Y; j++)
                 Playspace[i,j] = new Room(i, j, Fountain);
 
-        // Triggers creation of various hazards
+        // Creating all hazards
         CreateHazards<Pit>(sizeSelect);
         CreateHazards<Maelstrom>(sizeSelect);
         CreateHazards<Amarok>(sizeSelect);
@@ -210,12 +215,9 @@ public class PlayArea
 
     public void MaelstromCollision(Player player)
     {
-        if (CurrentRoom.HazardType == typeof(Maelstrom))
-        {
-            Maelstrom tempMaelstrom = (Maelstrom)CurrentRoom.Hazard;
+        Maelstrom tempMaelstrom = (Maelstrom)CurrentRoom.Hazard;
 
             tempMaelstrom.TriggerMovePlayer(player);
-        }
     }
 
     public bool HazaradCollisionCheck<T>(Player player)
@@ -240,48 +242,6 @@ public class PlayArea
 
         return false;
     }
-
-    /// <summary>
-    /// Uses the X property of GridSize property to determine how many rooms get pits. 
-    /// Pits are assigned randomly, only disallowed in the entrance and the fountain room.
-    /// </summary>
-    /*private void PlacePits(AreaSize sizeSelect)
-    {
-        // Initialize random number generation
-        Random randomNum = new();
-
-        // Takes user-selected PlayArea size and determines the number of pits to place with some arithmetic (Total grid area divided by double of X-axis length)
-        int numberOfPits = sizeSelect switch
-        {
-            AreaSize.Small => (SmallGrid.X * SmallGrid.Y) / (SmallGrid.X * 2),
-            AreaSize.Medium => (MediumGrid.X * MediumGrid.Y) / (MediumGrid.X * 2),
-            AreaSize.Large => (LargeGrid.X * LargeGrid.Y) / (LargeGrid.X * 2),
-            _ => 1
-        };
-
-        // Initializing PitRooms with a new array of size numberOfPits
-        PitRooms = new Room[numberOfPits];
-
-        // Loops for numberOfPits to create all the pit rooms and assign them to PitRooms[]
-        for (int i = 0; i < numberOfPits; i++)
-        {
-            // Create prospective coordinates
-            (int x, int y) tempCoords = (randomNum.Next(1, GridSize.X - 1), randomNum.Next(1, GridSize.Y - 1));
-
-            // Preventing the pit from being placed in the fountain room
-            while(CheckForFountainOverlap(tempCoords))
-                tempCoords = (randomNum.Next(1, GridSize.X - 1), randomNum.Next(1, GridSize.Y - 1));
-
-            // Assigning the new pit room to the PitRooms[] array, then using that same assignment to match and replace the corresponding value of Playspace[]
-            PitRooms[i] = new(tempCoords.x, tempCoords.y, true, false);
-            Playspace[PitRooms[i].Coordinates.X, PitRooms[i].Coordinates.Y] = PitRooms[i];
-        }
-
-        int pitCheckIndex = CheckForPitOverlap();
-
-        if (pitCheckIndex < PitRooms.Length)
-            ReRollPitPlacement(randomNum, pitCheckIndex);
-    }*/
 
     /// <summary>
     /// Takes a hazard type (Pit, Maelstrom, Amarok) and determines how many of the hazard should be created based on GridSize.
@@ -459,11 +419,10 @@ public class PlayArea
 public class Room
 {
     public Coordinate Coordinates { get; set; }
+    // This might need to be hard-typed instead of casting
     public Hazard Hazard { get; private set; }
     public Type HazardType { get; private set; }
     public bool ContainsFountain { get; init; } = false;
-    public bool ContainsPit { get; init; } = false;
-    public bool ContainsMaelstrom { get; init; } = false;
 
     /// <summary>
     /// Creates a Room object, specifically checking if Fountain matches defined Coordinates.
@@ -476,25 +435,6 @@ public class Room
         Coordinates = new(x, y);
 
         if (Coordinates == fountain.Coordinates) ContainsFountain = true;
-    }
-
-    // This constructor should become obsolete
-    /// <summary>
-    /// Creates a Room object, specifically to assign hazards to the room.
-    /// Since hazards check that they're not overlapping the Fountain when they're created/placed, 
-    /// we can safely assume ContainsFountain remains false and can skip that param.
-    /// </summary>
-    /// <param name="x">int</param>
-    /// <param name="y">int</param>
-    /// <param name="pitStatus">bool</param>
-    /// <param name="maelstromStatus">bool</param>
-    public Room(int x, int y, bool pitStatus, bool maelstromStatus)
-    {
-        Coordinates = new(x, y);
-
-        ContainsPit = pitStatus;
-
-        ContainsMaelstrom = maelstromStatus;
     }
 
     public void DefineRoomHazard<T>(Hazard roomHazard)
