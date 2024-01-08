@@ -5,14 +5,7 @@ GameRunner.Run();
 
 /* To Do's
 *       High Priority:
-*           Maelstroms should call TriggerPlayerMove() on collision with Player
-*           GameRunner.CheckForLoss() will need to be updated to handle multiple hazards
-*               Need to add a loss condition for colliding with an Amarok
-*           Consider implementing a base class or interface Hazard which the implements Pits, Maelstroms, and Amaroks
-*           PlayArea.CreateHazards needs to be updated to create Pits
-*           On move, Maelstroms and Player need to stay with PlayArea bounds (should already be handled by Coordinates.Update())
-*           Pits needs to be updated to use Hazard framework (created framework)
-*           Amaroks still need to be added (created framework)
+*           All hazards fail to trigger a consequence when a player is in their room
 *       Medium Priority:
 *           Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
 *           Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
@@ -72,23 +65,38 @@ public static class GameRunner
 
             Console.WriteLine($"Player coords before move: ({player.Coordinates.X},{player.Coordinates.Y})");
 
-            playArea.HazaradCollisionCheck<Maelstrom>(player);
+            // If the player's current room contains a hazard and it is of type Maelstrom, then run logic to move player
+            // This is probably overly complicated
+            if(playArea.CurrentRoom.HasHazard() && playArea.CurrentRoom.HazardType == typeof(Maelstrom))
+                playArea.MaelstromCollision(player);
+            
+            //playArea.HazaradCollisionCheck<Maelstrom>(player);
 
             Console.WriteLine($"Player coords after move: ({player.Coordinates.X},{player.Coordinates.Y})");
 
-        } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(player, playArea));
+        } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(playArea));
 
         Console.ForegroundColor = ConsoleColor.Magenta;
 
         if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
-        else if (CheckForLoss(player, playArea)) Console.WriteLine("Oh no! You fell in a pit and died. GAME OVER");
+        else if (CheckForLoss(playArea)) Console.WriteLine("Oh no! You died. GAME OVER");
         else Console.WriteLine("Thanks for playing!");
 
         Console.ResetColor();
     }
 
     private static bool CheckForWin(Player player, Fountain fountain) => player.Coordinates.X == 0 && player.Coordinates.Y == 0 && fountain.Status == true;
-    private static bool CheckForLoss(Player player, PlayArea playspace) => playspace.Playspace[player.Coordinates.X, player.Coordinates.Y].ContainsPit == true;
+    private static bool CheckForLoss(PlayArea playspace)
+    {
+        if (playspace.CurrentRoom.HasHazard() && playspace.CurrentRoom.HazardType == typeof(Pit))
+            return true;
+
+        else if (playspace.CurrentRoom.HasHazard() && playspace.CurrentRoom.HazardType == typeof(Amarok))
+            return true;
+
+        else return false;
+    }
+    //private static bool CheckForLoss(Player player, PlayArea playspace) => playspace.Playspace[player.Coordinates.X, player.Coordinates.Y].ContainsPit == true;
 
     // Debug tool
     /*
@@ -151,8 +159,10 @@ public class PlayArea
     public Room[,] Playspace;
     public Coordinate GridSize { get; set; } 
     public Fountain Fountain { get; init; }
-    public Room[] PitRooms { get; private set; }
+    // Are all the arrays of hazards necessary if I'm using Room.HasHazard and casting the correct type for Room.Hazard when I need to use them?
+    public Pit[] Pits { get; private set; }
     public Maelstrom[] Maelstroms { get; private set; }
+    public Amarok[] Amaroks { get; private set; }
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
@@ -175,11 +185,10 @@ public class PlayArea
             for (int j = 0; j < GridSize.Y; j++)
                 Playspace[i,j] = new Room(i, j, Fountain);
 
-        // Triggers pit placement after all the rooms are initialized and fountain is assigned its room.
-        PlacePits(sizeSelect);
-
-        // Triggers creation of maelstrom(s)
+        // Triggers creation of various hazards
+        CreateHazards<Pit>(sizeSelect);
         CreateHazards<Maelstrom>(sizeSelect);
+        CreateHazards<Amarok>(sizeSelect);
     }
 
     /// <summary>
@@ -196,6 +205,16 @@ public class PlayArea
                 CurrentRoom = Playspace[room.Coordinates.X, room.Coordinates.Y];
                 break;
             }    
+        }
+    }
+
+    public void MaelstromCollision(Player player)
+    {
+        if (CurrentRoom.HazardType == typeof(Maelstrom))
+        {
+            Maelstrom tempMaelstrom = (Maelstrom)CurrentRoom.Hazard;
+
+            tempMaelstrom.TriggerMovePlayer(player);
         }
     }
 
@@ -226,7 +245,7 @@ public class PlayArea
     /// Uses the X property of GridSize property to determine how many rooms get pits. 
     /// Pits are assigned randomly, only disallowed in the entrance and the fountain room.
     /// </summary>
-    private void PlacePits(AreaSize sizeSelect)
+    /*private void PlacePits(AreaSize sizeSelect)
     {
         // Initialize random number generation
         Random randomNum = new();
@@ -262,7 +281,7 @@ public class PlayArea
 
         if (pitCheckIndex < PitRooms.Length)
             ReRollPitPlacement(randomNum, pitCheckIndex);
-    }
+    }*/
 
     /// <summary>
     /// Takes a hazard type (Pit, Maelstrom, Amarok) and determines how many of the hazard should be created based on GridSize.
@@ -275,9 +294,45 @@ public class PlayArea
     {
         int numberOfHazards;
 
+        Console.WriteLine("Checking if T = Pit");
+
         // Is there a better, cleaner way to track the values associated with arena size? (Dictionary maybe?)
+        if (typeof(T) == typeof(Pit))
+        {
+            Console.WriteLine("Determing number of pits");
+            
+            // I originally conceived this convoluted method to determine the number of hazards with a formula for infinitely expansive grid size
+            numberOfHazards = sizeSelect switch
+            {
+                AreaSize.Small => (SmallGrid.X * SmallGrid.Y) / (SmallGrid.X * 2),      // 2
+                AreaSize.Medium => (MediumGrid.X * MediumGrid.Y) / (MediumGrid.X * 2),  // 3
+                AreaSize.Large => (LargeGrid.X * LargeGrid.Y) / (LargeGrid.X * 2),      // 4
+                _ => 1
+            };
+
+            Console.WriteLine("Creating new pit array");
+            Pits = new Pit[numberOfHazards];
+
+            Console.WriteLine("Creating and adding pits to Playspace array");
+            for (int i = 0; i < Pits.Length; i++)
+            {
+                Pits[i] = new(this);
+                Console.WriteLine($"Pit #{i} created at ({Pits[i].Coordinates.X},{Pits[i].Coordinates.Y})");
+
+                Playspace[Pits[i].Coordinates.X, Pits[i].Coordinates.Y].DefineRoomHazard<Pit>(Pits[i]);
+                Console.WriteLine($"Pit #{i} added to Room");
+            }
+
+            Console.WriteLine("Done creating pits");
+            // Exiting the method once the hazards have been created and added
+            return;
+        }
+
+        Console.WriteLine("Checking if T = Maelstrom");
+
         if (typeof(T) == typeof(Maelstrom))
         {
+            Console.WriteLine("Determing number of maelstroms");
             numberOfHazards = sizeSelect switch
             {
                 AreaSize.Small => 1,
@@ -286,17 +341,29 @@ public class PlayArea
                 _ => 1
             };
 
+            Console.WriteLine("Creating new maelstrom array");
             Maelstroms = new Maelstrom[numberOfHazards];
 
+            Console.WriteLine("Creating and adding maelstroms to Playspace array");
             for (int i = 0; i < Maelstroms.Length; i++)
+            {
                 Maelstroms[i] = new(this);
+                Console.WriteLine($"Maelstrom #{i} created at ({Maelstroms[i].Coordinates.X},{Maelstroms[i].Coordinates.Y})");
 
-            for(int i = 0; i < Maelstroms.Length; i++)
-                Playspace[Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y] = new(Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y, false, true);
+                Playspace[Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y].DefineRoomHazard<Maelstrom>(Maelstroms[i]);
+                Console.WriteLine($"Maelstrom #{i} added to Room");
+            }
+
+            Console.WriteLine("Done creating maelstroms");
+            // Exiting the method once the hazards have been created and added
+            return;
         }
-            
 
-        /*else if (typeof(T) == typeof(Amarok))  // Will be used when Amaroks are implemented
+        Console.WriteLine("Checking if T = Amarok");
+
+        if (typeof(T) == typeof(Amarok))
+        {
+            Console.WriteLine("Determing number of amaroks");
             numberOfHazards = sizeSelect switch
             {
                 AreaSize.Small => 1,
@@ -304,8 +371,25 @@ public class PlayArea
                 AreaSize.Large => 3,
                 _ => 1
             };
-        */
 
+            Console.WriteLine("Creating new amarok array");
+            Amaroks = new Amarok[numberOfHazards];
+
+            Console.WriteLine("Creating and adding amaroks to Playspace array");
+            for (int i = 0; i < Amaroks.Length; i++)
+            {
+                // Creates a new Amarok object using the current Playspace at the current place in the Amaroks[] array
+                Amaroks[i] = new(this);
+                Console.WriteLine($"Amarok #{i} created at ({Amaroks[i].Coordinates.X},{Amaroks[i].Coordinates.Y})");
+
+                Playspace[Amaroks[i].Coordinates.X, Amaroks[i].Coordinates.Y].DefineRoomHazard<Amarok>(Amaroks[i]);
+                Console.WriteLine($"Amarok #{i} added to Room");
+            }
+
+            Console.WriteLine("Done creating amaroks");
+            // Exiting the method once the hazards have been created and added
+            return;
+        }
     }
 
     private bool CheckForFountainOverlap((int x, int y) coords) => coords.x == Fountain.Coordinates.X && coords.y == Fountain.Coordinates.Y;
@@ -316,7 +400,7 @@ public class PlayArea
     /// Else, returns the current length of PitRooms[].
     /// </summary>
     /// <returns>int</returns>
-    private int CheckForPitOverlap()
+    /*private int CheckForPitOverlap()
     {
         foreach(Room roomToCompare in PitRooms)
         {
@@ -326,7 +410,7 @@ public class PlayArea
         }
         
         return PitRooms.Length;
-    }
+    }*/
 
     /// <summary>
     /// Takes a previously declared Random object declared in PlacePits(), and an int returned by CheckForPitOverlap().
@@ -335,7 +419,7 @@ public class PlayArea
     /// </summary>
     /// <param name="randomNum">Random</param>
     /// <param name="indexOfPitToReplace">int</param>
-    private void ReRollPitPlacement(Random randomNum, int indexOfPitToReplace) 
+    /*private void ReRollPitPlacement(Random randomNum, int indexOfPitToReplace) 
     {
         // Initialize coords so they can be used outside of do loop
         (int x, int y) tempCoords;
@@ -368,7 +452,7 @@ public class PlayArea
 
         PitRooms[indexOfPitToReplace] = new(tempCoords.x, tempCoords.y, true, false);
         Playspace[PitRooms[indexOfPitToReplace].Coordinates.X, PitRooms[indexOfPitToReplace].Coordinates.Y] = PitRooms[indexOfPitToReplace];
-    }
+    }*/
 
     // Maintained for debug purposes
     public void DrawPlayspace(Player player)
@@ -396,12 +480,16 @@ public class PlayArea
                     Console.Write("_C_|");
 
                 // Draws pit locations
-                else if (Playspace[i, j].ContainsPit == true)
+                else if (Playspace[i, j].HazardType == typeof(Pit))
                     Console.Write("_P_|");
 
                 // Draws maelstrom locations
-                else if (Playspace[i, j].ContainsMaelstrom == true)
+                else if (Playspace[i, j].HazardType == typeof(Maelstrom))
                     Console.Write("_M_|");
+
+                // Draws amarok locations
+                else if (Playspace[i, j].HazardType == typeof(Amarok))
+                    Console.Write("_A_|");
 
                 // Draws fountain location if conditions are met (Intended for debug only)
                 else if (i == Fountain.Coordinates.X && j == Fountain.Coordinates.Y)
@@ -434,6 +522,7 @@ public class Room
 {
     public Coordinate Coordinates { get; set; }
     public Hazard Hazard { get; private set; }
+    public Type HazardType { get; private set; }
     public bool ContainsFountain { get; init; } = false;
     public bool ContainsPit { get; init; } = false;
     public bool ContainsMaelstrom { get; init; } = false;
@@ -451,6 +540,7 @@ public class Room
         if (Coordinates == fountain.Coordinates) ContainsFountain = true;
     }
 
+    // This constructor should become obsolete
     /// <summary>
     /// Creates a Room object, specifically to assign hazards to the room.
     /// Since hazards check that they're not overlapping the Fountain when they're created/placed, 
@@ -469,13 +559,19 @@ public class Room
         ContainsMaelstrom = maelstromStatus;
     }
 
+    public void DefineRoomHazard<T>(Hazard roomHazard)
+    {
+        Hazard = roomHazard;
+        HazardType = typeof(T);
+    }
+
     public bool HasHazard() => Hazard != null;
 }
 
 public class Fountain
 {
     public Coordinate Coordinates { get; init; }
-    public bool Status { get; set; }
+    public bool Status { get; private set; }
 
     public Fountain(PlayArea playspace)
     {
@@ -672,12 +768,13 @@ public static class Communicator
             Console.WriteLine(FountainRoomOff);
         }
 
+        /* Commenting out temporarily to attempt to resolve a softlock
         // Close to Pit description
         else if (CloseToPit(player, playspace))
         {
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(PitClose);
-        }
+        }*/
 
         // Default empty room text
         else
@@ -713,6 +810,8 @@ public static class Communicator
         else return false;
     }
 
+    // Commenting out temporarily to try and suss out a softlock
+    /*
     /// <summary>
     /// Looks at all the possible locations where a pit could be adjacent to a player, returning true if there is a pit in any of the 8 rooms surrounding the player.
     /// Ignores current room's coordinates since player would have already lost.
@@ -731,7 +830,7 @@ public static class Communicator
                 return true;
 
         return false;
-    }
+    }*/
 
     public static void ShowHelpText() => Console.WriteLine(HelpText);
 }
@@ -741,65 +840,70 @@ public static class Communicator
 public class Hazard
 {
     public Coordinate Coordinates { get; protected set; }
-    public PlayArea Playspace { get; protected set; }
+    public PlayArea Playarea { get; protected set; }
 
     public Hazard(PlayArea playspace)
     {
-        Playspace = playspace;
+        Playarea = playspace;
     }
 
     public bool CheckPlayerCollision(Player player) => player.Coordinates.X == Coordinates.X && player.Coordinates.Y == Coordinates.Y;
 
-    protected bool ValidateHazardPlacement<T>((int x, int y) coords)
+    /// <summary>
+    /// With the help of ValidateHazardPlacement(), random coordinates are generated here,
+    /// and validated to make sure there's no overlap in hazard placement and fountain placement,
+    /// or hazards placed on top of other hazards. Returns a tuple used to create a Coordinate record.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <returns></returns>
+    protected Coordinate GenerateValidRandomCoords()
     {
-        // Guard statement to immediately return a false result if coordinates match Fountain's coordinates
-        if (coords.x == Playspace.Fountain.Coordinates.X && coords.y == Playspace.Fountain.Coordinates.Y) return false;
-        
-        // Checks by type and sorts through the associated container of hazards
-        if (typeof(T) == typeof(Maelstrom))
-             foreach(Maelstrom comparisonHazard in Playspace.Maelstroms)
-                if (comparisonHazard != null && (coords.x == comparisonHazard.Coordinates.X && coords.y == comparisonHazard.Coordinates.Y))
-                    return false;
-
-        return true;
-    }
-
-    protected Coordinate GenerateValidRandomCoords<T>()
-    {
-        // Using same logic from pits to check that maelstrom doesn't overlap fountain
+        // Creating a new Random object to generate numbers
         Random randCoordGeneration = new();
 
-        (int x, int y) tempCoords = (randCoordGeneration.Next(1, Playspace.GridSize.X), randCoordGeneration.Next(1, Playspace.GridSize.Y));
+        (int x, int y) tempCoords = (randCoordGeneration.Next(1, Playarea.GridSize.X), randCoordGeneration.Next(1, Playarea.GridSize.Y));
+        
+        // Continues to generate coordinates until the Room at tempCoords is empty and doesn't contain the fountain
+        while (!ValidateHazardPlacement(tempCoords))
+            tempCoords = (randCoordGeneration.Next(1, Playarea.GridSize.X), randCoordGeneration.Next(1, Playarea.GridSize.Y));
 
-        // Continues to generate coordinates until the hazard is not placed on another hazard nor in the fountain room
-        while (!ValidateHazardPlacement<T>(tempCoords))
-            while (tempCoords.x == Playspace.Fountain.Coordinates.X && tempCoords.y == Playspace.Fountain.Coordinates.Y)
-                tempCoords = (randCoordGeneration.Next(1, Playspace.GridSize.X), randCoordGeneration.Next(1, Playspace.GridSize.Y));
-
+        // Returns the validated coordinates as a Coordinate record
         return new(tempCoords.x, tempCoords.y);
     }
 
-    protected void UpdateHazardCoordinates(int x, int y) => Coordinates.Update(x, y, Playspace);
+    /// <summary>
+    /// Takes in tuple of coordinates, and checks the playspace to make sure the coordinates don't match fountain coordinates.
+    /// If they do match fountain coordinates, then new coordinates are generated.
+    /// Then, it calls Room.HasHazard() to see if there's already a hazard in the room. If yes, returns false and new coordinates 
+    /// must be generated.
+    /// </summary>
+    /// <param name="coords"></param>
+    /// <returns></returns>
+    protected bool ValidateHazardPlacement((int x, int y) coords)
+    {
+        // Guard statement to immediately return a false result if coordinates match Fountain's coordinates
+        if (Playarea.Playspace[coords.x, coords.y].ContainsFountain) return false;
+
+        // Guard statement to return false if the room already contains a hazard
+        if (Playarea.Playspace[coords.x, coords.y].HasHazard()) return false;
+
+        // If the room is empty, return true
+        return true;
+    }
+
+    protected void UpdateHazardCoordinates(int x, int y) => Coordinates.Update(x, y, Playarea);
 }
 
 public class Pit : Hazard
 {
-    public Pit(PlayArea playspace) : base(playspace)
-    {
-        Coordinates = GenerateValidRandomCoords<Pit>();
-    }
-
-
+    public Pit(PlayArea playspace) : base(playspace) => Coordinates = GenerateValidRandomCoords();
 }
 
 public class Maelstrom : Hazard
 {
     private IMoveCommands[] ThrowPlayerDirections { get; } = new IMoveCommands[] { new MoveNorth(), new MoveWest(), new MoveWest() };  // Allows Maelstrom displacement directions to be changed easily
 
-    public Maelstrom(PlayArea playspace) : base(playspace) 
-    {
-        Coordinates = GenerateValidRandomCoords<Maelstrom>();
-    }
+    public Maelstrom(PlayArea playspace) : base(playspace) => Coordinates = GenerateValidRandomCoords();
 
     public void TriggerMovePlayer(Player player)
     {
@@ -818,23 +922,23 @@ public class Maelstrom : Hazard
 
     // Currently not working, throwing an invalid move when attempting to update coordinates. Need to determine if newCoords is providing a bogus value,
     // or if there's something in Coordinates.Update() that would cause it to refect newCoords values
+    // Should also clear the hazard from the room it lived in before moving, and update Room to contain it
     private void Move()
     {
-        Coordinate newCoords = GenerateValidRandomCoords<Maelstrom>();
+        Coordinate newCoords = GenerateValidRandomCoords();
 
         Console.WriteLine($"New coordinates for maelstrom generated: ({newCoords.x},{newCoords.y})");
 
 
         // This is returning an invalid move if the maelstrom is on the edge of the arena
-        Coordinates.Update(newCoords.x, newCoords.y, Playspace);
+        Coordinates.Update(newCoords.x, newCoords.y, Playarea);
     }
 }
 
-/*public class Amarok : Hazard
+public class Amarok : Hazard
 { 
-
-}*/
-
+    public Amarok(PlayArea playspace) : base(playspace) => Coordinates = GenerateValidRandomCoords();
+}
 
 // Player Commands //
 
