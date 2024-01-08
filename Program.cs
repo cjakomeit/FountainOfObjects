@@ -392,68 +392,6 @@ public class PlayArea
         }
     }
 
-    private bool CheckForFountainOverlap((int x, int y) coords) => coords.x == Fountain.Coordinates.X && coords.y == Fountain.Coordinates.Y;
-
-    /// <summary>
-    /// Takes a value from PitRooms[] and compares it against each value in PitRooms[] including itself.
-    /// If Coordinates of value match compared value, and memory signature does not match, returns the current index of the loop.
-    /// Else, returns the current length of PitRooms[].
-    /// </summary>
-    /// <returns>int</returns>
-    /*private int CheckForPitOverlap()
-    {
-        foreach(Room roomToCompare in PitRooms)
-        {
-            for (int i = 0; i < PitRooms.Length; i++)
-                if ((roomToCompare.Coordinates.X == PitRooms[i].Coordinates.X && roomToCompare.Coordinates.Y == PitRooms[i].Coordinates.Y) && roomToCompare != PitRooms[i])
-                    return i;
-        }
-        
-        return PitRooms.Length;
-    }*/
-
-    /// <summary>
-    /// Takes a previously declared Random object declared in PlacePits(), and an int returned by CheckForPitOverlap().
-    /// Generates new coordinates to try for the duped pit room, and compares the new coordinates to the coordinates
-    /// of the Fountain Room as well as the other pit rooms to ensure the coordinates aren't duplicated again.
-    /// </summary>
-    /// <param name="randomNum">Random</param>
-    /// <param name="indexOfPitToReplace">int</param>
-    /*private void ReRollPitPlacement(Random randomNum, int indexOfPitToReplace) 
-    {
-        // Initialize coords so they can be used outside of do loop
-        (int x, int y) tempCoords;
-
-        // Local variable to track if the new coordinates match any existing pit placements
-        bool matchesExistingPitCoords = false;
-
-        do
-        {
-            // Create prospective coordinates
-            tempCoords = (randomNum.Next(1, GridSize.X), randomNum.Next(1, GridSize.Y));
-
-            // Preventing the pit from being placed in the fountain room
-            while (CheckForFountainOverlap(tempCoords))
-                tempCoords = (randomNum.Next(1, GridSize.X), randomNum.Next(1, GridSize.Y));
-
-            // Checking against the other existing pit rooms to make sure the value isn't duplicated again
-            for (int i = 0; i < PitRooms.Length; i++)
-            {
-                if (tempCoords.x == PitRooms[i].Coordinates.X && tempCoords.y == PitRooms[i].Coordinates.Y)
-                {
-                    matchesExistingPitCoords = true;
-                    continue;
-                }
-
-                else matchesExistingPitCoords = false;
-            }
-
-        } while (matchesExistingPitCoords); 
-
-        PitRooms[indexOfPitToReplace] = new(tempCoords.x, tempCoords.y, true, false);
-        Playspace[PitRooms[indexOfPitToReplace].Coordinates.X, PitRooms[indexOfPitToReplace].Coordinates.Y] = PitRooms[indexOfPitToReplace];
-    }*/
-
     // Maintained for debug purposes
     public void DrawPlayspace(Player player)
     {
