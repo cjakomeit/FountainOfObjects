@@ -5,7 +5,8 @@ GameRunner.Run();
 
 /* To Do's
 *       High Priority:
-*           Every hazard behaves as a Maelstrom
+*           Hit detection for hazards is completely broken
+*               Sometimes triggering on first move, sometimes not triggering at all
 *       Medium Priority:
 *           Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
 *           Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
@@ -13,6 +14,7 @@ GameRunner.Run();
 *               Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background?
 *       Low Priority:
 *           Add help text once all expansions are added
+*               Amaroks need to be added
 *           Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.       
 */
 
