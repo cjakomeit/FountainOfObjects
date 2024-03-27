@@ -1,5 +1,7 @@
 ﻿using System;
 
+Menu.SetWindowTitle();
+
 // SEND IT
 GameRunner.Run();
 
@@ -19,8 +21,6 @@ public static class GameRunner
 {
     public static void Run()
     {
-        Menu.SetWindowTitle();
-
         // Immediately initializing variable for tracking user input
         Options userCommand;
 
