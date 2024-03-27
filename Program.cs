@@ -1,92 +1,97 @@
 ﻿using System;
 
-// Initializing everything that needs to be spun up at the start
+// SEND IT
 GameRunner.Run();
 
 /* To Do's
 *       High Priority:
-
-*       Medium Priority:
-*           Collision should be handled by Hazard class, with sub-classes checking for collision individually, instead of GameRunner class
-*           Re-think how PlayArea updates Playspace[] when adding hazards (Maybe a method in Room class that facilitates updating assoc. hazard bool?)
-*           Maelstrom implemented, needs testing
-*               Maelstrom only triggers collision once, possibly because hazard coordinates are changing in the background?
+*           Maelstroms aren't migrating, need to update Playspace[](Maybe a method in Room class that facilitates updating assoc. hazard bool?)
+*           With CurrentRoom implemented, Communicator text isn't firing quickly when adjacent to a hazard room
+*       Medium Priority
+*           
 *       Low Priority:
 *           Add help text once all expansions are added
 *               Amaroks need to be added
 *           Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
-*           Would like to keep player in game loop on death for a restart
 */
 
 public static class GameRunner
 {
     public static void Run()
     {
-        // Player intro with game header and intro text describing objective. 
-        Menu.DrawHeader();
-        Communicator.NarrateIntro();
+        Menu.SetWindowTitle();
 
-        // Waits on user to specify play field before starting.
-        Menu.Display<AreaSize>();
-        AreaSize areaSizeSelect = Menu.UserChoiceAreaSize();
-        Console.Clear();
-
-        // Initializing all necessary game objects for start-up
-        PlayArea playArea = new(areaSizeSelect);
-        Player player = new(playArea);
-        Menu.SetWindowTitle();      
-
+        // Immediately initializing variable for tracking user input
         Options userCommand;
 
+        // Keeps the player in the game so that if the game ends they're automatically restarted
         do
         {
-            // Defining CurrentRoom on outset of loop
-            playArea.FindCurrentRoom(player);
+            // Player intro with game header and intro text describing objective.
+            Menu.DrawHeader();
+            Communicator.NarrateIntro();
 
-            playArea.DrawPlayspace(player);  // Debug only
+            // Waits on user to specify play field before starting.
+            Menu.Display<AreaSize>();
+            AreaSize areaSizeSelect = Menu.UserChoiceAreaSize();
+            Console.Clear();
 
-            // Gives player details on the room they're currently in            
-            Communicator.Communicate(player, playArea);
-
-            Menu.Display<Options>();
-
-            userCommand = Menu.UserChoiceMain();
-
-            switch (userCommand)
-            {
-                case Options.Move:
-                    player.TriggerMoveCommand();
-                    playArea.FindCurrentRoom(player);
-                    break;
-                case Options.ToggleFountain:
-                    player.TriggerFountainToggle(playArea.Fountain);
-                    break;
-                case Options.Help:
-                    Communicator.ShowHelpText();
-                    break;
-                case Options.Quit:
-                    break;
-            }
-
-            // If the player's current room contains a hazard and it is of type Maelstrom, then run logic to move player
-            if (playArea.CurrentRoom.HasHazard())
-            {
-                // Debug tool
-                Console.WriteLine($"Hazard detected: {playArea.CurrentRoom.HazardType}");
-                // Wrapping in guard statement
-                if (playArea.CurrentRoom.HazardType == typeof(Maelstrom))
-                    playArea.MaelstromCollision(player);
-    
-            }
+            // Initializing all necessary game objects for start-up
+            PlayArea playArea = new(areaSizeSelect);
+            Player player = new(playArea);      
             
-        } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(playArea));
+            // Start of actual gameplay loop
+            do
+            {
+                // Defining CurrentRoom on outset of loop
+                playArea.FindCurrentRoom(player);
 
-        Console.ForegroundColor = ConsoleColor.Magenta;
+                playArea.DrawPlayspace(player);  // Debug only
 
-        if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
-        else if (CheckForLoss(playArea)) Console.WriteLine("Oh no! You died. GAME OVER");
-        else Console.WriteLine("Thanks for playing!");
+                // Gives player details on the room they're currently in            
+                Communicator.Communicate(player, playArea);
 
+                Menu.Display<Options>();
+
+                userCommand = Menu.UserChoiceMain();
+
+                switch (userCommand)
+                {
+                    case Options.Move:
+                        player.TriggerMoveCommand();
+                        playArea.FindCurrentRoom(player);
+                        break;
+                    case Options.ToggleFountain:
+                        player.TriggerFountainToggle(playArea.Fountain);
+                        break;
+                    case Options.Help:
+                        Communicator.ShowHelpText();
+                        break;
+                    case Options.Quit:
+                        break;
+                }
+
+                // If the player's current room contains a hazard and it is of type Maelstrom, then run logic to move player
+                if (playArea.CurrentRoom.HasHazard())
+                {
+                    // Debug tool
+                    Console.WriteLine($"Hazard detected: {playArea.CurrentRoom.HazardType}");
+                    // Wrapping in guard statement
+                    if (playArea.CurrentRoom.HazardType == typeof(Maelstrom))
+                        playArea.MaelstromCollision(player);
+    
+                }
+            
+            } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(playArea));
+
+
+            Console.ForegroundColor = ConsoleColor.Magenta;
+
+            if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
+            else if (CheckForLoss(playArea)) Console.WriteLine("Oh no! You died. GAME OVER");
+            else Console.WriteLine("Thanks for playing!");
+        } while (userCommand != Options.Quit);
+        
         Console.ResetColor();
     }
 
