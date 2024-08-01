@@ -8,19 +8,17 @@ GameRunner.Run();
 /* To Do's
 *       For Feature Complete:
 *           Maelstroms move after moving player
-*           Communicate Maelstroms
-*           Communicate Amaroks
-*           Ammo counter for Shoot functionality
+*           Complete Hazard Communicator logic
 *           Kill monsters (not Pits) with Shoot functionality
-*           Getting Help Module (p.236)
 *       High Priority:
 *           Maelstroms aren't migrating, need to update Playspace[](Maybe a method in Room class that facilitates updating assoc. hazard bool?)
 *           With CurrentRoom implemented, Communicator needs a refactor
-*           Shooting along a border causes an IndexOutOfBounds error
+*           Shooting along a border causes an IndexOutOfBounds error (slightly related to the visual issue with grid coordinates)
 *       Medium Priority
 *           Visually, the grid coordinates are being swapped when displayed (eg. CurrentRoom appearing as (0,1) when player is at (1,0)
 *       Low Priority:
 *           Add help text once all expansions are added
+*               Maelstroms need to be added
 *               Amaroks need to be added
 */
 
@@ -62,6 +60,7 @@ public static class GameRunner
 
                 userCommand = Menu.UserChoiceMain();
 
+                // Decide what to do based on userCommand
                 switch (userCommand)
                 {
                     case Options.Move:
@@ -93,7 +92,6 @@ public static class GameRunner
             
             } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(playArea));
 
-
             Console.ForegroundColor = ConsoleColor.Magenta;
 
             if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
@@ -116,7 +114,7 @@ public static class GameRunner
         else return false;
     }
 
-    // Debug tool
+    // Debug tool for testing Pit placement
     /*
     public static void AutomatedTestPitPlacement()
     {
@@ -136,6 +134,7 @@ public class Player
 {
     public Coordinate Coordinates { get; set; }
     public PlayArea Playspace { get; init; }
+    public byte Ammo { get; private set; } = 5;
 
     public Player(PlayArea playArea)
     {
@@ -161,17 +160,29 @@ public class Player
 
     public void Shoot()
     {
-        IShootCommands command = Console.ReadKey(true).Key switch
+        if (Ammo > 0)
         {
-            ConsoleKey.DownArrow => new ShootSouth(),
-            ConsoleKey.RightArrow => new ShootEast(),
-            ConsoleKey.UpArrow => new ShootNorth(),
-            ConsoleKey.LeftArrow => new ShootWest(),
-            _ => new ShootNorth()
-        };
+            IShootCommands command = Console.ReadKey(true).Key switch
+            {
+                ConsoleKey.DownArrow => new ShootSouth(),
+                ConsoleKey.RightArrow => new ShootEast(),
+                ConsoleKey.UpArrow => new ShootNorth(),
+                ConsoleKey.LeftArrow => new ShootWest(),
+                _ => new ShootNorth()
+            };
 
-        Console.WriteLine(command);
-        Console.WriteLine($"Valid target hit: {command.Shoot(this, Playspace)}");
+            Console.WriteLine(command);
+            Console.WriteLine($"Valid target hit: {command.Shoot(this, Playspace)}");
+            // Decrements Ammo after successfully firing a shot
+            Ammo--;
+        }
+
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("No more arrows!");
+            Console.ResetColor();
+        }
     }
 
     public void TriggerFountainToggle(Fountain fountain)
@@ -551,19 +562,28 @@ public static class Communicator
     public static string EmptyRoom { get; } = "There's nothing to sense here.";
     public static string Entrance { get; } = "Bright light emanates from the cavern's mouth. You're at the entrance.";
     private static string EntranceNear { get; } = "You can see a faint light reaching out to you from the cavern's entrance.";
-    private static string FountainOffClose { get; } = "You hear distant dribbles. It's getting more humid.";
-    private static string FountainOnClose { get; } = "You hear rushing water. The air is damp and cool.";
+    private static string FountainOffNear { get; } = "You hear distant dribbles. It's getting more humid.";
+    private static string FountainOnNear { get; } = "You hear rushing water. The air is damp and cool.";
     public static string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...dank.";
     public static string FountainRoomOn { get; } = "The sound of rushing water fills the corridor. The Fountain of Objects has been reactivated!";
-    public static string GameIntro { get; } = "You arrive at the entrance to the cavern which contains the Fountain of Objects. Your goal? To venture inside, find and enable the Fountain, and escape with your life." +
-                                              "\nUse the information your senses provide to guide you to the room in which the Fountain rests.";
+    public static string GameIntro { get; } = " You arrive at the entrance to the cavern which contains the Fountain of Objects. Your goal? To venture inside, find and enable the Fountain, and escape with your life." +
+                                              "\n Use the information your senses provide to guide you to the room in which the Fountain rests.\n";
+    public static string InstructionsIntro { get; } = " \n How to Play\n" +
+                                                      " -----------\n";
+    public static string Instructions { get; } = " * Move through the cavern to find the Fountain of Objects. Toggle it on, then return to the cavern entrance to win.\n" +
+                                                 " * Watch out for Pits! Entering a room with a Pit will invariably lead to death.\n" +
+                                                 " * Avoid Maelstroms, sentient winds that will throw you to another room then relocate themselves.\n" +
+                                                 " * The undead amaroks roam the cavern halls, and will devour you whole. Avoid them to keep your hide.\n" +
+                                                 " * You're armed with a longbow and 5 mighty arrows. Use them wisely to vanquish Maelstroms and Amaroks.";
     public static string HelpText { get; } = "\nHow to Play:\n" +
                                              "  1. Move: Press the arrow key corresponding to the direction you want to move.\n" +
-                                             "  2. Toggle Fountain: If you're in the Fountain Room, this command toggles the state of the Fountain (On/Off).\n" +
-                                             "  3. Help: Displays details about available commands.\n" +
-                                             "  4. Quit: Quits the game.";
-    private static string PitClose { get; } = "You feel a draft. There is a pit in a nearby room.";
-    public static string CurrentRoom(Player player) => $"\nCurrent room: ({player.Coordinates.X},{player.Coordinates.Y})";
+                                             "  2. Shoot: Press the arrow key corresponding to the direction you want to fire an arrow.\n" +
+                                             "  3. Toggle Fountain: If you're in the Fountain Room, this command toggles the state of the Fountain (On/Off).\n" +
+                                             "  4. Help: Displays details about available commands. How you got here!\n" +
+                                             "  5. Quit: Quits the game fully.";
+    private static string PitNear { get; } = "You feel a foreboding draft. There is a pit in a nearby room.";
+    private static string MaelstromNear { get; } = "A violent gust of wind reverberates through the cavern. There is a maelstrom in a nearby room.";
+    private static string AmarokNear { get; } = "The stench of rotten flesh invades your nostrils. There is an amarok in a nearby room.";
 
     public static void Communicate(Player player, PlayArea playspace)
     {
@@ -572,11 +592,15 @@ public static class Communicator
          *      White: Room description text
          *      Blue: Fountain On text
          *      Magenta: Narrative text
-         */
+        */
 
-        // Outputs current Player coordinates
+        // Need to determine proper logic for this
+        Room nearestHazardRoom = NearestHazard(playspace);
+
+        // Outputs current Player coordinates and Ammo
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine(CurrentRoom(player));
+        Console.WriteLine(CurrentRoom(playspace));
+        Console.WriteLine($"Arrows: {player.Ammo}");
 
         // Entrance room description
         if (player.Coordinates.X == 0 && player.Coordinates.Y == 0)
@@ -585,18 +609,35 @@ public static class Communicator
             Console.WriteLine(Entrance);
         }
 
-        // Close to Fountain, Fountain Off
-        else if (playspace.Fountain.Status == false && CloseToFountain(player, playspace.Fountain))
+        else if (nearestHazardRoom.HazardType != null)
         {
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(FountainOffClose);
+
+            // Found this trick for Type checking in a switch statement off StackOverflow (Checking just typeof(X) throws a "Constant value is expected" error)
+            // https://stackoverflow.com/a/65642709
+            string hazardText = nearestHazardRoom?.HazardType switch
+            {
+                var value when value == typeof(Pit) => PitNear,
+                var value when value == typeof(Maelstrom) => MaelstromNear,
+                var value when value == typeof(Amarok) => AmarokNear,
+                _ => PitNear
+            };
+
+            Console.WriteLine(hazardText);
+        }
+
+        // Close to Fountain, Fountain Off
+        else if (playspace.Fountain.Status == false && NearFountain(player, playspace.Fountain))
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(FountainOffNear);
         }
 
         // Close to Fountain, Fountain On
-        else if (playspace.Fountain.Status == true && CloseToFountain(player, playspace.Fountain))
+        else if (playspace.Fountain.Status == true && NearFountain(player, playspace.Fountain))
         {
             Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine(FountainOnClose);
+            Console.WriteLine(FountainOnNear);
         }
 
         // Close to Entrance
@@ -638,22 +679,24 @@ public static class Communicator
         Console.ResetColor();
     }
 
+    // Displays intro + instructions text
     public static void NarrateIntro()
     {
         Console.ForegroundColor = ConsoleColor.Magenta;
 
-        Console.WriteLine(GameIntro);
+        Console.WriteLine(GameIntro + InstructionsIntro + Instructions);
 
         Console.ResetColor();
     }
 
     /// <summary>
-    /// Check if the player is on any tile which is adjancent to the fountain and returns true if they are.
+    /// Check if the player is on any tile which is adjacent to the fountain and returns true if they are.
+    /// Cardinals directions checked only.
     /// </summary>
     /// <param name="player">Player</param>
     /// <param name="fountain">Fountain</param>
     /// <returns>bool</returns>
-    private static bool CloseToFountain(Player player, Fountain fountain)
+    private static bool NearFountain(Player player, Fountain fountain)
     {
         if ((player.Coordinates.X == fountain.Coordinates.X - 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y - 1) ||
             (player.Coordinates.X == fountain.Coordinates.X + 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y + 1))
@@ -662,7 +705,28 @@ public static class Communicator
         else return false;
     }
 
-    // Commenting out temporarily to try and suss out a softlock
+    /// <summary>
+    /// Checks if rooms adjacent to current room contains a hazard, then returns the Hazard Type.
+    /// </summary>
+    /// <param name="playspace">PlayArea</param>
+    /// <returns>Hazard</returns>
+    private static Room NearestHazard(PlayArea playspace)
+    {
+        // Behemoth initializer forr the 4 adjacent rooms
+        /*Room[] adjacentRooms = new Room[4] { playspace.Grid[playspace.CurrentRoom.Coordinates.X + 1, playspace.CurrentRoom.Coordinates.Y], playspace.Grid[playspace.CurrentRoom.Coordinates.X - 1, playspace.CurrentRoom.Coordinates.Y],
+                                             playspace.Grid[playspace.CurrentRoom.Coordinates.X, playspace.CurrentRoom.Coordinates.Y + 1], playspace.Grid[playspace.CurrentRoom.Coordinates.X, playspace.CurrentRoom.Coordinates.Y - 1] };
+
+        foreach(Room room in adjacentRooms)
+        {
+            if (room.HasHazard())
+                return room;
+
+            else continue;
+        }*/
+
+        return playspace.CurrentRoom;
+    }
+    // Commenting out temporarily to try and suss out a softlock (Pit adjacency communicator)
     /*
     /// <summary>
     /// Looks at all the possible locations where a pit could be adjacent to a player, returning true if there is a pit in any of the 8 rooms surrounding the player.
@@ -683,8 +747,8 @@ public static class Communicator
 
         return false;
     }*/
-
     public static void ShowHelpText() => Console.WriteLine(HelpText);
+    public static string CurrentRoom(PlayArea playspace) => $"\nCurrent room: ({playspace.CurrentRoom.Coordinates.X},{playspace.CurrentRoom.Coordinates.Y})";
 }
 
 // Hazards //
@@ -880,5 +944,5 @@ public class ShootWest : IShootCommands
     }
 }
 
-public enum Options { Move = 1, Shoot, ToggleFountain, Help, Quit}
+public enum Options { Move = 1, Shoot, ToggleFountain, Help, Quit }
 public enum AreaSize { Small = 1, Medium, Large}
