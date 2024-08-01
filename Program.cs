@@ -6,6 +6,13 @@ Menu.SetWindowTitle();
 GameRunner.Run();
 
 /* To Do's
+*       For Feature Complete:
+*           Maelstroms move after moving player
+*           Communicate Maelstroms
+*           Communicate Amaroks
+*           Ammo counter for Shoot functionality
+*           Kill monsters (not Pits) with Shoot functionality
+*           Getting Help Module (p.236)
 *       High Priority:
 *           Maelstroms aren't migrating, need to update Playspace[](Maybe a method in Room class that facilitates updating assoc. hazard bool?)
 *           With CurrentRoom implemented, Communicator needs a refactor
