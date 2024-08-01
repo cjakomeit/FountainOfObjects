@@ -8,13 +8,13 @@ GameRunner.Run();
 /* To Do's
 *       High Priority:
 *           Maelstroms aren't migrating, need to update Playspace[](Maybe a method in Room class that facilitates updating assoc. hazard bool?)
-*           With CurrentRoom implemented, Communicator text isn't firing quickly when adjacent to a hazard room
+*           With CurrentRoom implemented, Communicator needs a refactor
+*           Shooting along a border causes an IndexOutOfBounds error
 *       Medium Priority
-*           
+*           Visually, the grid coordinates are being swapped when displayed (eg. CurrentRoom appearing as (0,1) when player is at (1,0)
 *       Low Priority:
 *           Add help text once all expansions are added
 *               Amaroks need to be added
-*           Communicator.Communicate() logic is pretty ugly. Look into a way to clean it up.
 */
 
 public static class GameRunner
@@ -61,6 +61,9 @@ public static class GameRunner
                         player.TriggerMoveCommand();
                         playArea.FindCurrentRoom(player);
                         break;
+                    case Options.Shoot:
+                        player.Shoot();
+                        break;
                     case Options.ToggleFountain:
                         player.TriggerFountainToggle(playArea.Fountain);
                         break;
@@ -79,7 +82,6 @@ public static class GameRunner
                     // Wrapping in guard statement
                     if (playArea.CurrentRoom.HazardType == typeof(Maelstrom))
                         playArea.MaelstromCollision(player);
-    
                 }
             
             } while (userCommand != Options.Quit && !CheckForWin(player, playArea.Fountain) && !CheckForLoss(playArea));
@@ -150,6 +152,21 @@ public class Player
 
     public void TriggerMoveCommand(IMoveCommands moveDirection) => moveDirection.Run(this);
 
+    public void Shoot()
+    {
+        IShootCommands command = Console.ReadKey(true).Key switch
+        {
+            ConsoleKey.DownArrow => new ShootSouth(),
+            ConsoleKey.RightArrow => new ShootEast(),
+            ConsoleKey.UpArrow => new ShootNorth(),
+            ConsoleKey.LeftArrow => new ShootWest(),
+            _ => new ShootNorth()
+        };
+
+        Console.WriteLine(command);
+        Console.WriteLine($"Valid target hit: {command.Shoot(this, Playspace)}");
+    }
+
     public void TriggerFountainToggle(Fountain fountain)
     {
         if (Coordinates.X == fountain.Coordinates.X && Coordinates.Y == fountain.Coordinates.Y)
@@ -166,7 +183,7 @@ public class Player
 public class PlayArea
 {
     public Room CurrentRoom { get; private set; }
-    public Room[,] Playspace;
+    public Room[,] Grid;
     public Coordinate GridSize { get; set; } 
     public Fountain Fountain { get; init; }
     // Are all the arrays of hazards necessary if I'm using Room.HasHazard and casting the correct type for Room.Hazard when I need to use them?
@@ -188,13 +205,13 @@ public class PlayArea
             _ => new(SmallGrid.X, SmallGrid.Y)
         };
         
-        Playspace = new Room[GridSize.X, GridSize.Y];
+        Grid = new Room[GridSize.X, GridSize.Y];
         Fountain = new(this);
 
         // Initializes all of the rooms
         for (int i = 0; i < GridSize.X; i++)
             for (int j = 0; j < GridSize.Y; j++)
-                Playspace[i,j] = new Room(i, j, Fountain);
+                Grid[i,j] = new Room(i, j, Fountain);
 
         // Creating all hazards
         CreateHazards<Pit>(sizeSelect);
@@ -202,12 +219,12 @@ public class PlayArea
         CreateHazards<Amarok>(sizeSelect);
 
         // Defaulting CurrentRoom to entrance room
-        CurrentRoom = Playspace[0, 0];
+        CurrentRoom = Grid[0, 0];
 
         // Debug tool
         for (int i = 0; i < GridSize.X; i++)
             for (int j = 0; j < GridSize.Y; j++)
-                Console.WriteLine($"Room {i},{j} hazard: {Playspace[i, j].HazardType}");
+                Console.WriteLine($"Room {i},{j} hazard: {Grid[i, j].HazardType}");
     }
 
     /// <summary>
@@ -215,7 +232,7 @@ public class PlayArea
     /// then assigns the room from Playspace[] to CurrentRoom and returns true, else returns false.
     /// </summary>
     /// <param name="player"></param>
-    public void FindCurrentRoom(Player player) => CurrentRoom = Playspace[player.Coordinates.X, player.Coordinates.Y];
+    public void FindCurrentRoom(Player player) => CurrentRoom = Grid[player.Coordinates.X, player.Coordinates.Y];
 
     public void MaelstromCollision(Player player)
     {
@@ -253,7 +270,7 @@ public class PlayArea
             {
                 Pits[i] = new(this);
 
-                Playspace[Pits[i].Coordinates.X, Pits[i].Coordinates.Y].DefineRoomHazard<Pit>(Pits[i]);
+                Grid[Pits[i].Coordinates.X, Pits[i].Coordinates.Y].DefineRoomHazard<Pit>(Pits[i]);
             }
 
             return;
@@ -275,7 +292,7 @@ public class PlayArea
             {
                 Maelstroms[i] = new(this);
 
-                Playspace[Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y].DefineRoomHazard<Maelstrom>(Maelstroms[i]);
+                Grid[Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y].DefineRoomHazard<Maelstrom>(Maelstroms[i]);
             }
 
             return;
@@ -297,7 +314,7 @@ public class PlayArea
             {
                 Amaroks[i] = new(this);
 
-                Playspace[Amaroks[i].Coordinates.X, Amaroks[i].Coordinates.Y].DefineRoomHazard<Amarok>(Amaroks[i]);
+                Grid[Amaroks[i].Coordinates.X, Amaroks[i].Coordinates.Y].DefineRoomHazard<Amarok>(Amaroks[i]);
             }
 
             return;
@@ -330,15 +347,15 @@ public class PlayArea
                     Console.Write("_C_|");
 
                 // Draws pit locations
-                else if (Playspace[i, j].HazardType == typeof(Pit))
+                else if (Grid[i, j].HazardType == typeof(Pit))
                     Console.Write("_P_|");
 
                 // Draws maelstrom locations
-                else if (Playspace[i, j].HazardType == typeof(Maelstrom))
+                else if (Grid[i, j].HazardType == typeof(Maelstrom))
                     Console.Write("_M_|");
 
                 // Draws amarok locations
-                else if (Playspace[i, j].HazardType == typeof(Amarok))
+                else if (Grid[i, j].HazardType == typeof(Amarok))
                     Console.Write("_A_|");
 
                 // Draws fountain location if conditions are met (Intended for debug only)
@@ -441,6 +458,7 @@ public class Menu
                 return userInput switch
                 {
                     (byte)Options.Move => Options.Move,
+                    (byte)Options.Shoot => Options.Shoot,
                     (byte)Options.ToggleFountain => Options.ToggleFountain,
                     (byte)Options.Help => Options.Help,
                     (byte)Options.Quit => Options.Quit
@@ -517,7 +535,7 @@ public record Coordinate(int x, int y)
         Y += y;
     }
 
-    // If any of the listed conditions are met, the move is considered in invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
+    // If any of the listed conditions are met, the move is considered invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
     private static bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x >= playspace.GridSize.X || y >= playspace.GridSize.Y);
 }
 
@@ -525,7 +543,7 @@ public static class Communicator
 {
     public static string EmptyRoom { get; } = "There's nothing to sense here.";
     public static string Entrance { get; } = "Bright light emanates from the cavern's mouth. You're at the entrance.";
-    private static string EntranceClose { get; } = "You can see a faint light reaching out to you from the cavern's entrance.";
+    private static string EntranceNear { get; } = "You can see a faint light reaching out to you from the cavern's entrance.";
     private static string FountainOffClose { get; } = "You hear distant dribbles. It's getting more humid.";
     private static string FountainOnClose { get; } = "You hear rushing water. The air is damp and cool.";
     public static string FountainRoomOff { get; } = "There's a musty smell permeating this room. The air feels...dank.";
@@ -578,7 +596,7 @@ public static class Communicator
         else if ((player.Coordinates.X == 1 && player.Coordinates.Y == 0) || (player.Coordinates.X == 0 && player.Coordinates.Y == 1))
         {
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(EntranceClose);
+            Console.WriteLine(EntranceNear);
         }
 
         // In Fountain Room, Fountain On
@@ -709,10 +727,10 @@ public class Hazard
     protected bool ValidateHazardPlacement((int x, int y) coords)
     {
         // Guard statement to immediately return a false result if coordinates match Fountain's coordinates
-        if (Playarea.Playspace[coords.x, coords.y].ContainsFountain) return false;
+        if (Playarea.Grid[coords.x, coords.y].ContainsFountain) return false;
 
         // Guard statement to return false if the room already contains a hazard
-        if (Playarea.Playspace[coords.x, coords.y].HasHazard()) return false;
+        if (Playarea.Grid[coords.x, coords.y].HasHazard()) return false;
 
         // If the room is empty, return true
         return true;
@@ -794,5 +812,66 @@ public class MoveWest : IMoveCommands
     public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
-public enum Options { Move = 1, ToggleFountain, Help, Quit}
+public interface IShootCommands
+{
+    public bool Shoot(Player player, PlayArea playSpace);
+}
+
+public class ShootNorth : IShootCommands
+{
+    public bool Shoot(Player player, PlayArea playSpace) 
+    {
+        // Defining the targeted Room for use 
+        var targetRoom = playSpace.Grid[player.Coordinates.X, player.Coordinates.Y + 1];
+
+        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            return true;
+
+        else return false;
+    }
+}
+
+public class ShootEast : IShootCommands
+{
+    public bool Shoot(Player player, PlayArea playSpace) 
+    {
+        // Defining the targeted Room for use 
+        var targetRoom = playSpace.Grid[player.Coordinates.X + 1, player.Coordinates.Y];
+
+        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            return true;
+
+        else return false;
+    }
+}
+
+public class ShootSouth : IShootCommands
+{
+    public bool Shoot(Player player, PlayArea playSpace) 
+    {
+        // Defining the targeted Room for use 
+        var targetRoom = playSpace.Grid[player.Coordinates.X, player.Coordinates.Y - 1];
+
+        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            return true;
+
+        else return false;
+    }
+}
+
+public class ShootWest : IShootCommands
+{
+    public bool Shoot(Player player, PlayArea playSpace) 
+    {
+        // Defining the targeted Room for use 
+        var targetRoom = playSpace.Grid[player.Coordinates.X - 1, player.Coordinates.Y];
+
+        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            return true;
+
+        else return false;
+    }
+}
+
+public enum Options { Move = 1, Shoot, ToggleFountain, Help, Quit}
 public enum AreaSize { Small = 1, Medium, Large}
