@@ -17,9 +17,6 @@ GameRunner.Run();
 *       Medium Priority
 *           Visually, the grid coordinates are being swapped when displayed (eg. CurrentRoom appearing as (0,1) when player is at (1,0)
 *       Low Priority:
-*           Add help text once all expansions are added
-*               Maelstroms need to be added
-*               Amaroks need to be added
 */
 
 public static class GameRunner
@@ -172,7 +169,7 @@ public class Player
             };
 
             Console.WriteLine(command);
-            Console.WriteLine($"Valid target hit: {command.Shoot(this, Playspace)}");
+            Console.WriteLine($"Valid target hit: {command.Shoot(Playspace)}");
             // Decrements Ammo after successfully firing a shot
             Ammo--;
         }
@@ -885,15 +882,15 @@ public class MoveWest : IMoveCommands
 
 public interface IShootCommands
 {
-    public bool Shoot(Player player, PlayArea playSpace);
+    public bool Shoot(PlayArea playSpace);
 }
 
 public class ShootNorth : IShootCommands
 {
-    public bool Shoot(Player player, PlayArea playSpace) 
+    public bool Shoot(PlayArea playSpace) 
     {
         // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[player.Coordinates.X, player.Coordinates.Y + 1];
+        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y + 1];
 
         if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             return true;
@@ -904,10 +901,10 @@ public class ShootNorth : IShootCommands
 
 public class ShootEast : IShootCommands
 {
-    public bool Shoot(Player player, PlayArea playSpace) 
+    public bool Shoot(PlayArea playSpace) 
     {
         // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[player.Coordinates.X + 1, player.Coordinates.Y];
+        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X + 1, playSpace.CurrentRoom.Coordinates.Y];
 
         if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             return true;
@@ -918,10 +915,10 @@ public class ShootEast : IShootCommands
 
 public class ShootSouth : IShootCommands
 {
-    public bool Shoot(Player player, PlayArea playSpace) 
+    public bool Shoot(PlayArea playSpace) 
     {
         // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[player.Coordinates.X, player.Coordinates.Y - 1];
+        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y - 1];
 
         if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             return true;
@@ -932,10 +929,10 @@ public class ShootSouth : IShootCommands
 
 public class ShootWest : IShootCommands
 {
-    public bool Shoot(Player player, PlayArea playSpace) 
+    public bool Shoot(PlayArea playSpace) 
     {
         // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[player.Coordinates.X - 1, player.Coordinates.Y];
+        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X - 1, playSpace.CurrentRoom.Coordinates.Y];
 
         if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             return true;
