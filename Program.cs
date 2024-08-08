@@ -10,11 +10,11 @@ GameRunner.Run();
 *           Complete Hazard Communicator logic
 *       High Priority:
 *           With CurrentRoom implemented, Communicator needs a refactor
-*           Player has to shoot the direction to the left of them to hit a target (eg ShootNorth to hit an enemy to the East)
+*           ShootNorth and ShootSouth don't register hazards
 *       Medium Priority
-*           Visually, the grid coordinates are being swapped when displayed (eg. CurrentRoom appearing as (0,1) when player is at (1,0)
-*           You're not in the fountain room! plays when player is in fountain room.
+*           
 *       Low Priority:
+*           Clean up debug text
 *       
 *       Learnings:
 *           * If I were to rewrite this whole program I'd determine how to make Hazards static and potentially even an interface. Theoretically,
@@ -195,12 +195,16 @@ public class Player
 
     public void TriggerFountainToggle(Fountain fountain)
     {
+        // Not using PlayArea.CurrentRoom as it's more important here to make sure the player is actually in the fountain room
         if (Coordinates.X == fountain.Coordinates.X && Coordinates.Y == fountain.Coordinates.Y)
             fountain.ToggleStatus();
 
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("You're not in the fountain room!");
-        Console.ResetColor();
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("You're not in the fountain room!");
+            Console.ResetColor();
+        }
     }
 
     public static string GetPlayerInput() => Console.ReadLine().Trim().ToLower();
@@ -366,23 +370,23 @@ public class PlayArea
             for (int j = 0; j < GridSize.Y; j++)
             {
                 // Draws player character location if conditions are met
-                if (i == player.Coordinates.X && j == player.Coordinates.Y)
+                if (j == player.Coordinates.X && i == player.Coordinates.Y)
                     Console.Write("_C_|");
 
                 // Draws pit locations
-                else if (Grid[i, j].HazardType == typeof(Pit))
+                else if (Grid[j, i].HazardType == typeof(Pit))
                     Console.Write("_P_|");
 
                 // Draws maelstrom locations
-                else if (Grid[i, j].HazardType == typeof(Maelstrom))
+                else if (Grid[j, i].HazardType == typeof(Maelstrom))
                     Console.Write("_M_|");
 
                 // Draws amarok locations
-                else if (Grid[i, j].HazardType == typeof(Amarok))
+                else if (Grid[j, i].HazardType == typeof(Amarok))
                     Console.Write("_A_|");
 
                 // Draws fountain location if conditions are met (Intended for debug only)
-                else if (i == Fountain.Coordinates.X && j == Fountain.Coordinates.Y)
+                else if (j == Fountain.Coordinates.X && i == Fountain.Coordinates.Y)
                     Console.Write("_F_|");
 
                 // Default state draws a standard GridSquare and defined above
@@ -558,7 +562,7 @@ public record Coordinate(int x, int y)
             return;
         }
 
-        // Proceeds if the move is determined valid (InvalidMoveCheck returns false)
+        // Proceed if the move is determined valid (InvalidMoveCheck returns false)
         X += x;
         Y += y;
     }
@@ -890,22 +894,22 @@ public interface IMoveCommands
 
 public class MoveNorth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(-1, 0, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
 public class MoveSouth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(1, 0, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
 }
 
 public class MoveEast : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(1, 0, player.Playspace);
 }
 
 public class MoveWest : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(-1, 0, player.Playspace);
 }
 
 public interface IShootCommands
