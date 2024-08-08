@@ -201,14 +201,9 @@ public class Player
 public class PlayArea
 {
     public Room CurrentRoom { get; private set; }
+    public Coordinate GridSize { get; set; }
     public Room[,] Grid;
-    public Coordinate GridSize { get; set; } 
     public Fountain Fountain { get; init; }
-    // Are all the arrays of hazards necessary if I'm using Room.HasHazard and casting the correct type for Room.Hazard when I need to use them?
-    // These arrays are referenced frequently so seems I should maintain them. They don't seem to affect memory heavily. 
-    public Pit[] Pits { get; private set; }
-    public Maelstrom[] Maelstroms { get; private set; }
-    public Amarok[] Amaroks { get; private set; }
     private (int X, int Y) SmallGrid = (4, 4);
     private (int X, int Y) MediumGrid = (6, 6);
     private (int X, int Y) LargeGrid = (8, 8);
@@ -282,13 +277,13 @@ public class PlayArea
                 _ => 1
             };
 
-            Pits = new Pit[numberOfHazards];
+            Pit[] pits = new Pit[numberOfHazards];
 
-            for (int i = 0; i < Pits.Length; i++)
+            for (int i = 0; i < pits.Length; i++)
             {
-                Pits[i] = new(this);
+                pits[i] = new(this);
 
-                Grid[Pits[i].Coordinates.X, Pits[i].Coordinates.Y].DefineRoomHazard<Pit>(Pits[i]);
+                Grid[pits[i].Coordinates.X, pits[i].Coordinates.Y].DefineRoomHazard<Pit>(pits[i]);
             }
 
             return;
@@ -304,13 +299,13 @@ public class PlayArea
                 _ => 1
             };
 
-            Maelstroms = new Maelstrom[numberOfHazards];
+            Maelstrom[] maelstroms = new Maelstrom[numberOfHazards];
 
-            for (int i = 0; i < Maelstroms.Length; i++)
+            for (int i = 0; i < maelstroms.Length; i++)
             {
-                Maelstroms[i] = new(this);
+                maelstroms[i] = new(this);
 
-                Grid[Maelstroms[i].Coordinates.X, Maelstroms[i].Coordinates.Y].DefineRoomHazard<Maelstrom>(Maelstroms[i]);
+                Grid[maelstroms[i].Coordinates.X, maelstroms[i].Coordinates.Y].DefineRoomHazard<Maelstrom>(maelstroms[i]);
             }
 
             return;
@@ -326,13 +321,13 @@ public class PlayArea
                 _ => 1
             };
 
-            Amaroks = new Amarok[numberOfHazards];
+            Amarok[] amaroks = new Amarok[numberOfHazards];
 
-            for (int i = 0; i < Amaroks.Length; i++)
+            for (int i = 0; i < amaroks.Length; i++)
             {
-                Amaroks[i] = new(this);
+                amaroks[i] = new(this);
 
-                Grid[Amaroks[i].Coordinates.X, Amaroks[i].Coordinates.Y].DefineRoomHazard<Amarok>(Amaroks[i]);
+                Grid[amaroks[i].Coordinates.X, amaroks[i].Coordinates.Y].DefineRoomHazard<Amarok>(amaroks[i]);
             }
 
             return;
