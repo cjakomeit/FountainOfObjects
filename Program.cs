@@ -253,7 +253,7 @@ public class PlayArea
     {
         Maelstrom tempMaelstrom = (Maelstrom)CurrentRoom.Hazard;
 
-            tempMaelstrom.TriggerMovePlayer(player);
+        tempMaelstrom.TriggerMovePlayer(player);
     }
 
     /// <summary>
@@ -551,7 +551,7 @@ public record Coordinate(int x, int y)
     }
 
     // If any of the listed conditions are met, the move is considered invalid. (Still feels clunky by passing in PlayArea argument, but better than being handled by Player object).
-    private static bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x >= playspace.GridSize.X || y >= playspace.GridSize.Y);
+    public static bool InvalidMoveCheck(int x, int y, PlayArea playspace) => (x < 0 || y < 0) || (x >= playspace.GridSize.X || y >= playspace.GridSize.Y);
 }
 
 public static class Communicator
@@ -889,13 +889,17 @@ public class ShootNorth : IShootCommands
 {
     public bool Shoot(PlayArea playSpace) 
     {
-        // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y + 1];
+        // Verifies coordinates will be within bounds before checking if a hazard was hit
+        if (!Coordinate.InvalidMoveCheck(playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y + 1, playSpace))
+        {
+            // Defining the targeted Room for use 
+            var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y + 1];
 
-        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
-            return true;
+            if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+                return true;
+        }
 
-        else return false;
+        return false;
     }
 }
 
@@ -903,13 +907,17 @@ public class ShootEast : IShootCommands
 {
     public bool Shoot(PlayArea playSpace) 
     {
-        // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X + 1, playSpace.CurrentRoom.Coordinates.Y];
+        // Verifies coordinates will be within bounds before checking if a hazard was hit
+        if (!Coordinate.InvalidMoveCheck(playSpace.CurrentRoom.Coordinates.X + 1, playSpace.CurrentRoom.Coordinates.Y, playSpace))
+        {
+            // Defining the targeted Room for use 
+            var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X + 1, playSpace.CurrentRoom.Coordinates.Y];
 
-        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
-            return true;
+            if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+                return true;
+        }
 
-        else return false;
+        return false;
     }
 }
 
@@ -917,13 +925,17 @@ public class ShootSouth : IShootCommands
 {
     public bool Shoot(PlayArea playSpace) 
     {
-        // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y - 1];
+        // Verifies coordinates will be within bounds before checking if a hazard was hit
+        if (!Coordinate.InvalidMoveCheck(playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y - 1, playSpace))
+        {
+            // Defining the targeted Room for use 
+            var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y - 1];
 
-        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
-            return true;
-
-        else return false;
+            if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+                return true;
+        }
+        
+        return false;
     }
 }
 
@@ -931,15 +943,21 @@ public class ShootWest : IShootCommands
 {
     public bool Shoot(PlayArea playSpace) 
     {
-        // Defining the targeted Room for use 
-        var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X - 1, playSpace.CurrentRoom.Coordinates.Y];
+        // Verifies coordinates will be within bounds before checking if a hazard was hit
+        if (!Coordinate.InvalidMoveCheck(playSpace.CurrentRoom.Coordinates.X - 1, playSpace.CurrentRoom.Coordinates.Y, playSpace))
+        {
+            // Defining the targeted Room for use 
+            var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X - 1, playSpace.CurrentRoom.Coordinates.Y];
 
-        if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
-            return true;
-
-        else return false;
+            if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            {
+                return true;
+            }
+        }
+        
+        return false;
     }
 }
 
 public enum Options { Move = 1, Shoot, ToggleFountain, Help, Quit }
-public enum AreaSize { Small = 1, Medium, Large}
+public enum AreaSize { Small = 1, Medium, Large }
