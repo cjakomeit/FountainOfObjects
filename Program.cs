@@ -6,11 +6,11 @@ Menu.SetWindowTitle();
 GameRunner.Run();
 
 /* To Do's
-*       For Feature Complete:
-*           Complete Hazard Communicator logic
-*       High Priority:
+*       Blockers:
+*           Hazard triggers Communicate() for Pits only
 *           With CurrentRoom implemented, Communicator needs a refactor
-*           ShootNorth and ShootSouth don't register hazards
+*       High Priority:
+*           
 *       Medium Priority
 *           
 *       Low Priority:
@@ -22,6 +22,7 @@ GameRunner.Run();
 *           * I've been forced to consider much more carefully how necessary many-to-many relationships are, how much complexity they add
 *           compared to the value they bring.
 *           * I have a much finer understanding of the logic involved in if statements. I also picked up the habit of using guard statements.
+*           * It doesn't make sense to have the Coordinate record checking if a move is valid, that should be handled by the PlayArea class.
 *           * Doing this project was a great way to learn how to maintain and effectively refactor a large-scale, complex program.
 *       
 *       Copyright: Chandler Jakomeit, August 7th, 2024
@@ -118,21 +119,6 @@ public static class GameRunner
 
         else return false;
     }
-
-    // Debug tool for testing Pit placement
-    /*
-    public static void AutomatedTestPitPlacement()
-    {
-        for (int i = 0; i < 20; i++)
-        {
-            PlayArea playArea = new(AreaSize.Large);
-
-            Player testPlayer = new(playArea);
-
-            playArea.DrawPlayspace(testPlayer);
-        }
-    }
-    */
 }
 
 public class Player
@@ -179,8 +165,18 @@ public class Player
             Console.WriteLine(command);
 
             if (command.Shoot(Playspace))
+            {
+                Console.ForegroundColor = ConsoleColor.Magenta;
                 Console.WriteLine("Monster killed!");
-            else Console.WriteLine("Arrow missed!");
+                Console.ResetColor();
+            }
+                
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("Arrow missed!");
+                Console.ResetColor();
+            }
                 
             Ammo--;
         }
@@ -348,6 +344,19 @@ public class PlayArea
         }
     }
 
+    public bool CheckAdjacentRoomsForHazards()
+    {
+        if(!(CurrentRoom.Coordinates.X + 1 > GridSize.X - 1 || CurrentRoom.Coordinates.Y + 1 > GridSize.Y - 1 || 
+           CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0))
+        {
+            if (Grid[CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1].HasHazard() ||
+                        Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1].HasHazard())
+                return true;
+        }
+        
+        return false;
+    }
+
     // Maintained for debug purposes
     public void DrawPlayspace(Player player)
     {
@@ -356,16 +365,16 @@ public class PlayArea
         // Making sure the grid is pushed onto its own line
         Console.WriteLine();
 
-        // Draws top of grid squares
-        for (int i = 0; i < GridSize.X; i++)
+        // Draws top of grid squares (adjusting for Y coordinates along left side
+        for (int i = 0; i < GridSize.X + 2; i++)
             Console.Write(" ___");
             
         // Line break to start drawing actual play space
         Console.WriteLine();
 
-        for (int i = 0; i < GridSize.X; i++)
+        for (int i = GridSize.X-1; i >= 0 ; i--)
         {
-            Console.Write($"|");
+            Console.Write($"{i} |");
 
             for (int j = 0; j < GridSize.Y; j++)
             {
@@ -393,14 +402,11 @@ public class PlayArea
                 else Console.Write($"{GridSquare}");
             }
 
-            // Drawing X coordinate grid along right side
-            Console.Write($" {i}");
-
             // Pushing to new row
             Console.WriteLine();
         }
 
-        // Draws Y coordinate grid along bottom
+        // Draws X coordinate grid along bottom
         for (int i = 0; i < GridSize.X; i++)
             Console.Write($"  {i} ");
 
@@ -598,6 +604,9 @@ public static class Communicator
     private static string PitNear { get; } = "You feel a foreboding draft. There is a pit in a nearby room.";
     private static string MaelstromNear { get; } = "A violent gust of wind reverberates through the cavern. There is a maelstrom in a nearby room.";
     private static string AmarokNear { get; } = "The stench of rotten flesh invades your nostrils. There is an amarok in a nearby room.";
+    private static string ArrowHit { get; } = "Monster killed!";
+    private static string ArrowMiss { get; } = "Arrow missed!";
+    private static string ArrowOut { get; } = "No more arrows!";
 
     public static void Communicate(Player player, PlayArea playspace)
     {
@@ -623,7 +632,7 @@ public static class Communicator
             Console.WriteLine(Entrance);
         }
 
-        else if (nearestHazardRoom.HazardType != null)
+        else if (playspace.CheckAdjacentRoomsForHazards())
         {
             Console.ForegroundColor = ConsoleColor.White;
 
@@ -894,12 +903,12 @@ public interface IMoveCommands
 
 public class MoveNorth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
 }
 
 public class MoveSouth : IMoveCommands
 {
-    public void Run(Player player) => player.Coordinates.Update(0, 1, player.Playspace);
+    public void Run(Player player) => player.Coordinates.Update(0, -1, player.Playspace);
 }
 
 public class MoveEast : IMoveCommands
@@ -929,7 +938,6 @@ public class ShootNorth : IShootCommands
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             {
-                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
                 playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
             }
@@ -951,7 +959,6 @@ public class ShootEast : IShootCommands
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             {
-                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
                 playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
             }
@@ -964,7 +971,7 @@ public class ShootEast : IShootCommands
 public class ShootSouth : IShootCommands
 {
     public bool Shoot(PlayArea playSpace) 
-    {
+    {   
         // Verifies coordinates will be within bounds before checking if a hazard was hit
         if (!Coordinate.InvalidMoveCheck(playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y - 1, playSpace))
         {
@@ -973,7 +980,6 @@ public class ShootSouth : IShootCommands
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             {
-                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
                 playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
             }
@@ -995,7 +1001,6 @@ public class ShootWest : IShootCommands
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             {
-                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
                 playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
             }
@@ -1007,3 +1012,4 @@ public class ShootWest : IShootCommands
 
 public enum Options { Move = 1, Shoot, ToggleFountain, Help, Quit }
 public enum AreaSize { Small = 1, Medium, Large }
+public enum ArrowSelector { Hit, Miss, Out}
