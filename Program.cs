@@ -9,7 +9,7 @@ GameRunner.Run();
 *       For Feature Complete:
 *           Maelstroms move after moving player
 *           Complete Hazard Communicator logic
-*           Kill monsters (not Pits) with Shoot functionality
+*           Remove monsters from map and Communicator after they're killed
 *       High Priority:
 *           Maelstroms aren't migrating, need to update Playspace[](Maybe a method in Room class that facilitates updating assoc. hazard bool?)
 *           With CurrentRoom implemented, Communicator needs a refactor
@@ -169,11 +169,14 @@ public class Player
             };
 
             Console.WriteLine(command);
-            Console.WriteLine($"Valid target hit: {command.Shoot(Playspace)}");
-            // Decrements Ammo after successfully firing a shot
+
+            if (command.Shoot(Playspace))
+                Console.WriteLine("Monster killed!");
+            else Console.WriteLine("Arrow missed!");
+                
             Ammo--;
         }
-
+        
         else
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -425,6 +428,7 @@ public class Room
     }
 
     public bool HasHazard() => Hazard != null;
+    public void DestroyHazard() => Hazard = null;
 }
 
 public class Fountain
@@ -896,7 +900,11 @@ public class ShootNorth : IShootCommands
             var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y + 1];
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            {
+                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
+                playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
+            }
         }
 
         return false;
@@ -914,7 +922,11 @@ public class ShootEast : IShootCommands
             var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X + 1, playSpace.CurrentRoom.Coordinates.Y];
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            {
+                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
+                playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
+            }
         }
 
         return false;
@@ -932,7 +944,11 @@ public class ShootSouth : IShootCommands
             var targetRoom = playSpace.Grid[playSpace.CurrentRoom.Coordinates.X, playSpace.CurrentRoom.Coordinates.Y - 1];
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
+            {
+                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
+                playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
+            }
         }
         
         return false;
@@ -951,6 +967,8 @@ public class ShootWest : IShootCommands
 
             if (targetRoom.HasHazard() && targetRoom.HazardType != typeof(Pit))
             {
+                Console.WriteLine($"Hazard: {targetRoom.HazardType}");
+                playSpace.Grid[targetRoom.Coordinates.X, targetRoom.Coordinates.Y].DestroyHazard();
                 return true;
             }
         }
