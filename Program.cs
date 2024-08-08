@@ -7,16 +7,24 @@ GameRunner.Run();
 
 /* To Do's
 *       For Feature Complete:
-*           Maelstroms move after moving player
 *           Complete Hazard Communicator logic
-*           Remove monsters from map and Communicator after they're killed
 *       High Priority:
-*           Maelstroms aren't migrating, need to update Playspace[](Maybe a method in Room class that facilitates updating assoc. hazard bool?)
 *           With CurrentRoom implemented, Communicator needs a refactor
-*           Shooting along a border causes an IndexOutOfBounds error (slightly related to the visual issue with grid coordinates)
+*           Player has to shoot the direction to the left of them to hit a target (eg ShootNorth to hit an enemy to the East)
 *       Medium Priority
 *           Visually, the grid coordinates are being swapped when displayed (eg. CurrentRoom appearing as (0,1) when player is at (1,0)
+*           You're not in the fountain room! plays when player is in fountain room.
 *       Low Priority:
+*       
+*       Learnings:
+*           * If I were to rewrite this whole program I'd determine how to make Hazards static and potentially even an interface. Theoretically,
+*           this would simplify their use and Hazards don't really need to contain much instance data.
+*           * I've been forced to consider much more carefully how necessary many-to-many relationships are, how much complexity they add
+*           compared to the value they bring.
+*           * I have a much finer understanding of the logic involved in if statements. I also picked up the habit of using guard statements.
+*           * Doing this project was a great way to learn how to maintain and effectively refactor a large-scale, complex program.
+*       
+*       Copyright: Chandler Jakomeit, August 7th, 2024
 */
 
 public static class GameRunner
@@ -241,17 +249,19 @@ public class PlayArea
     }
 
     /// <summary>
-    /// Parses through Playspace[] until a room matches the coordinates of the Player, 
-    /// then assigns the room from Playspace[] to CurrentRoom and returns true, else returns false.
+    /// Defines CurrentRoom property as the Room at Grid[player X, player Y].
     /// </summary>
     /// <param name="player"></param>
     public void FindCurrentRoom(Player player) => CurrentRoom = Grid[player.Coordinates.X, player.Coordinates.Y];
 
+
     public void MaelstromCollision(Player player)
     {
-        Maelstrom tempMaelstrom = (Maelstrom)CurrentRoom.Hazard;
+        Maelstrom tempMaelstrom = CurrentRoom.Hazard as Maelstrom;
 
         tempMaelstrom.TriggerMovePlayer(player);
+
+        CurrentRoom.DestroyHazard();
     }
 
     /// <summary>
@@ -423,7 +433,11 @@ public class Room
     }
 
     public bool HasHazard() => Hazard != null;
-    public void DestroyHazard() => Hazard = null;
+    public void DestroyHazard() 
+    {
+        Hazard = null;
+        HazardType = null;
+    }
 }
 
 public class Fountain
@@ -841,9 +855,24 @@ public class Maelstrom : Hazard
 
         Console.WriteLine($"New coordinates for maelstrom generated: ({newCoords.x},{newCoords.y})");
 
-
         // This is returning an invalid move if the maelstrom is on the edge of the arena
-        Coordinates.Update(newCoords.x, newCoords.y, Playarea);
+        Console.WriteLine("Has hazard?" + Playarea.Grid[newCoords.x, newCoords.y].HasHazard());
+
+        // If the new room for the Maelstrom already has a hazard, keep regenerating coordinates until a suitable room is found
+        while (!Playarea.Grid[newCoords.x, newCoords.y].HasHazard())
+        {
+            Console.WriteLine($"Checking if new room can accept hazard ({newCoords.x},{newCoords.y})");
+            if (!Playarea.Grid[newCoords.x, newCoords.y].HasHazard())
+            {
+                Playarea.Grid[newCoords.x, newCoords.y].DefineRoomHazard<Maelstrom>(this);
+                Console.WriteLine($"Added maelstrom to Playarea.Grid at ({newCoords.x},{newCoords.y})");
+            }
+
+            else { 
+                newCoords = GenerateValidRandomCoords();
+            Console.WriteLine($"Generated new coords ({newCoords.x},{newCoords.y})");
+            }
+        }
     }
 }
 
