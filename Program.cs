@@ -80,7 +80,7 @@ public static class GameRunner
                         player.TriggerFountainToggle(playArea.Fountain);
                         break;
                     case Options.Help:
-                        Communicator.ShowHelpText();
+                        Communicator.HelpText();
                         break;
                     case Options.Quit:
                         break;
@@ -151,9 +151,11 @@ public class Player
 
     public void Shoot()
     {
+        IShootCommands command;
+
         if (Ammo > 0)
         {
-            IShootCommands command = Console.ReadKey(true).Key switch
+            command = Console.ReadKey(true).Key switch
             {
                 ConsoleKey.DownArrow => new ShootSouth(),
                 ConsoleKey.RightArrow => new ShootEast(),
@@ -162,31 +164,14 @@ public class Player
                 _ => new ShootNorth()
             };
 
-            Console.WriteLine(command);
+            Communicator.ArrowShot(Ammo, command.Shoot(Playspace));
 
-            if (command.Shoot(Playspace))
-            {
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                Console.WriteLine("Monster killed!");
-                Console.ResetColor();
-            }
-                
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Arrow missed!");
-                Console.ResetColor();
-            }
-                
             Ammo--;
         }
-        
+
+        // Calls communicator with function result prefilled since the only way to get here is with 0 arrows
         else
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("No more arrows!");
-            Console.ResetColor();
-        }
+            Communicator.ArrowShot(Ammo, false);
     }
 
     public void TriggerFountainToggle(Fountain fountain)
@@ -253,7 +238,6 @@ public class PlayArea
     /// </summary>
     /// <param name="player"></param>
     public void FindCurrentRoom(Player player) => CurrentRoom = Grid[player.Coordinates.X, player.Coordinates.Y];
-
 
     public void MaelstromCollision(Player player)
     {
@@ -350,11 +334,22 @@ public class PlayArea
            CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0))
         {
             if (Grid[CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1].HasHazard() ||
-                        Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1].HasHazard())
+                Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1].HasHazard())
                 return true;
         }
         
         return false;
+    }
+
+    public Room[] GetAdjacentRooms()
+    {
+        if (!(CurrentRoom.Coordinates.X + 1 > GridSize.X - 1 || CurrentRoom.Coordinates.Y + 1 > GridSize.Y - 1 ||
+           CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0))
+            return new Room[] { Grid[CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y], Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1],
+                          Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y], Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1] };
+
+        // Return an empty array if the adjacent rooms are out of bounds
+        return new Room[4];
     }
 
     // Maintained for debug purposes
@@ -595,12 +590,13 @@ public static class Communicator
                                                  " * Avoid Maelstroms, sentient winds that will throw you to another room then relocate themselves.\n" +
                                                  " * The undead amaroks roam the cavern halls, and will devour you whole. Avoid them to keep your hide.\n" +
                                                  " * You're armed with a longbow and 5 mighty arrows. Use them wisely to vanquish Maelstroms and Amaroks.";
-    public static string HelpText { get; } = "\nHow to Play:\n" +
+    public static string Help { get; } = "\nHow to Play:\n" +
                                              "  1. Move: Press the arrow key corresponding to the direction you want to move.\n" +
                                              "  2. Shoot: Press the arrow key corresponding to the direction you want to fire an arrow.\n" +
                                              "  3. Toggle Fountain: If you're in the Fountain Room, this command toggles the state of the Fountain (On/Off).\n" +
                                              "  4. Help: Displays details about available commands. How you got here!\n" +
                                              "  5. Quit: Quits the game fully.";
+    private static string CurrentRoom { get; } = "Current Room: ";
     private static string PitNear { get; } = "You feel a foreboding draft. There is a pit in a nearby room.";
     private static string MaelstromNear { get; } = "A violent gust of wind reverberates through the cavern. There is a maelstrom in a nearby room.";
     private static string AmarokNear { get; } = "The stench of rotten flesh invades your nostrils. There is an amarok in a nearby room.";
@@ -618,21 +614,39 @@ public static class Communicator
         */
 
         // Need to determine proper logic for this
-        Room nearestHazardRoom = NearestHazard(playspace);
+        Room nearestHazardRoom = NearestHazardRoom(playspace);
 
         // Outputs current Player coordinates and Ammo
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine(CurrentRoom(playspace));
+        Console.WriteLine(FindCurrentRoom(playspace));
         Console.WriteLine($"Arrows: {player.Ammo}");
 
         // Entrance room description
-        if (player.Coordinates.X == 0 && player.Coordinates.Y == 0)
+        if (playspace.CurrentRoom.Coordinates.X == 0 && playspace.CurrentRoom.Coordinates.Y == 0)
         {
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(Entrance);
         }
 
-        else if (playspace.CheckAdjacentRoomsForHazards())
+        // If player is in Fountain Room, render FountainRoomOn/Off
+        else if (InFountainRoom(playspace))
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+
+            if (playspace.Fountain.Status)
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine(FountainRoomOn);
+            }
+                
+            else
+                Console.WriteLine(FountainRoomOff);
+
+            Console.ResetColor();
+        }
+
+        // If a Hazard is in another room, render Hazard-specific text
+        else if (nearestHazardRoom.HasHazard())
         {
             Console.ForegroundColor = ConsoleColor.White;
 
@@ -648,49 +662,30 @@ public static class Communicator
 
             Console.WriteLine(hazardText);
         }
-
-        // Close to Fountain, Fountain Off
-        else if (playspace.Fountain.Status == false && NearFountain(player, playspace.Fountain))
+        
+        // If the player is near the Fountain Room, render FountainNearOn/Off
+        else if (CheckNearFountain(playspace))
         {
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(FountainOffNear);
+
+            if (playspace.Fountain.Status)
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine(FountainOnNear);
+            }
+            
+            else
+                Console.WriteLine(FountainOffNear);
+
+            Console.ResetColor();
         }
 
-        // Close to Fountain, Fountain On
-        else if (playspace.Fountain.Status == true && NearFountain(player, playspace.Fountain))
-        {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine(FountainOnNear);
-        }
-
-        // Close to Entrance
-        else if ((player.Coordinates.X == 1 && player.Coordinates.Y == 0) || (player.Coordinates.X == 0 && player.Coordinates.Y == 1))
+        // Render EntranceNear
+        else if ((playspace.CurrentRoom.Coordinates.X == 1 && playspace.CurrentRoom.Coordinates.Y == 0) || (playspace.CurrentRoom.Coordinates.X == 0 && playspace.CurrentRoom.Coordinates.Y == 1))
         {
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(EntranceNear);
         }
-
-        // In Fountain Room, Fountain On
-        else if ((player.Coordinates.X == playspace.Fountain.Coordinates.X && player.Coordinates.Y == playspace.Fountain.Coordinates.Y) && playspace.Fountain.Status == true)
-        {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine(FountainRoomOn);
-        }
-
-        // In Fountain Room, Fountain Off
-        else if ((player.Coordinates.X == playspace.Fountain.Coordinates.X && player.Coordinates.Y == playspace.Fountain.Coordinates.Y) && playspace.Fountain.Status == false)
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(FountainRoomOff);
-        }
-
-        /* Commenting out temporarily to attempt to resolve a softlock
-        // Close to Pit description
-        else if (CloseToPit(player, playspace))
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine(PitClose);
-        }*/
 
         // Default empty room text
         else
@@ -700,6 +695,50 @@ public static class Communicator
         }
         
         Console.ResetColor();
+    }
+
+    public static void ArrowShot(int ammoCount, bool shotResult)
+    {
+        if (ammoCount <= 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(ArrowOut);
+            Console.ResetColor();
+        }
+
+        else if (shotResult == true)
+        {
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine(ArrowHit);
+            Console.ResetColor();
+        }
+
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(ArrowMiss);
+            Console.ResetColor();
+        }
+    }
+
+    private static Room NearestHazardRoom(PlayArea playspace)
+    {
+        foreach(Room room in playspace.GetAdjacentRooms())
+        {
+            if (room != null && room.HasHazard())
+                return room;
+        }
+
+        return playspace.CurrentRoom;
+    }
+
+    private static bool InFountainRoom(PlayArea playSpace)
+    {
+        if (playSpace.CurrentRoom.Coordinates.X == playSpace.Fountain.Coordinates.X && 
+            playSpace.CurrentRoom.Coordinates.Y == playSpace.Fountain.Coordinates.Y)
+            return true;
+
+        else return false;
     }
 
     // Displays intro + instructions text
@@ -713,65 +752,25 @@ public static class Communicator
     }
 
     /// <summary>
-    /// Check if the player is on any tile which is adjacent to the fountain and returns true if they are.
-    /// Cardinals directions checked only.
-    /// </summary>
-    /// <param name="player">Player</param>
-    /// <param name="fountain">Fountain</param>
-    /// <returns>bool</returns>
-    private static bool NearFountain(Player player, Fountain fountain)
-    {
-        if ((player.Coordinates.X == fountain.Coordinates.X - 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y - 1) ||
-            (player.Coordinates.X == fountain.Coordinates.X + 1 && player.Coordinates.Y == fountain.Coordinates.Y) || (player.Coordinates.X == fountain.Coordinates.X && player.Coordinates.Y == fountain.Coordinates.Y + 1))
-                return true;
-        
-        else return false;
-    }
-
-    /// <summary>
-    /// Checks if rooms adjacent to current room contains a hazard, then returns the Hazard Type.
+    /// Uses the PlayArea member GetAdjacentRooms()
+    /// to find if fountain is nearby.
+    /// Cardinal directions only.
     /// </summary>
     /// <param name="playspace">PlayArea</param>
-    /// <returns>Hazard</returns>
-    private static Room NearestHazard(PlayArea playspace)
-    {
-        // Behemoth initializer forr the 4 adjacent rooms
-        /*Room[] adjacentRooms = new Room[4] { playspace.Grid[playspace.CurrentRoom.Coordinates.X + 1, playspace.CurrentRoom.Coordinates.Y], playspace.Grid[playspace.CurrentRoom.Coordinates.X - 1, playspace.CurrentRoom.Coordinates.Y],
-                                             playspace.Grid[playspace.CurrentRoom.Coordinates.X, playspace.CurrentRoom.Coordinates.Y + 1], playspace.Grid[playspace.CurrentRoom.Coordinates.X, playspace.CurrentRoom.Coordinates.Y - 1] };
-
-        foreach(Room room in adjacentRooms)
-        {
-            if (room.HasHazard())
-                return room;
-
-            else continue;
-        }*/
-
-        return playspace.CurrentRoom;
-    }
-    // Commenting out temporarily to try and suss out a softlock (Pit adjacency communicator)
-    /*
-    /// <summary>
-    /// Looks at all the possible locations where a pit could be adjacent to a player, returning true if there is a pit in any of the 8 rooms surrounding the player.
-    /// Ignores current room's coordinates since player would have already lost.
-    /// </summary>
-    /// <param name="player">Player</param>
-    /// <param name="playspace">PlayArea</param>
     /// <returns>bool</returns>
-    private static bool CloseToPit(Player player, PlayArea playspace)
+    private static bool CheckNearFountain(PlayArea playspace)
     {
-        // Eyes out for a way to optimize this ungodly if-block
-        foreach(Room room in playspace.PitRooms)
-            if ((player.Coordinates.X == room.Coordinates.X + 1 && player.Coordinates.Y == room.Coordinates.Y + 1) || (player.Coordinates.X == room.Coordinates.X - 1 && player.Coordinates.Y == room.Coordinates.Y - 1) ||  // X AND Y
-                (player.Coordinates.X == room.Coordinates.X - 1 && player.Coordinates.Y == room.Coordinates.Y + 1) || (player.Coordinates.X == room.Coordinates.X + 1 && player.Coordinates.Y == room.Coordinates.Y - 1) ||  // X XOR Y
-                (player.Coordinates.X == room.Coordinates.X && player.Coordinates.Y == room.Coordinates.Y + 1)     || (player.Coordinates.X == room.Coordinates.X && player.Coordinates.Y == room.Coordinates.Y - 1)     ||  // +Y OR -Y
-                (player.Coordinates.X == room.Coordinates.X + 1 && player.Coordinates.Y == room.Coordinates.Y)     || (player.Coordinates.X == room.Coordinates.X - 1 && player.Coordinates.Y == room.Coordinates.Y))        // +X OR -X
+        foreach (Room room in playspace.GetAdjacentRooms())
+            if (room != null && room.ContainsFountain)
                 return true;
 
         return false;
-    }*/
-    public static void ShowHelpText() => Console.WriteLine(HelpText);
-    public static string CurrentRoom(PlayArea playspace) => $"\nCurrent room: ({playspace.CurrentRoom.Coordinates.X},{playspace.CurrentRoom.Coordinates.Y})";
+    }
+
+    public static void HelpText() => Console.WriteLine(Help);
+
+    // Adds current room's coordinates to boilerplate CurrentRoom text
+    public static string FindCurrentRoom(PlayArea playspace) => CurrentRoom + $"({playspace.CurrentRoom.Coordinates.X},{playspace.CurrentRoom.Coordinates.Y})";
 }
 
 // Hazards //
