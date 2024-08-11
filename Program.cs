@@ -7,8 +7,7 @@ GameRunner.Run();
 
 /* To Do's
 *       Blockers:
-*           Hazard triggers Communicate() for Pits only
-*           With CurrentRoom implemented, Communicator needs a refactor
+*           Hazard and Fountain communication is inconsistent, likely an issue in GetAdjacentRooms
 *       High Priority:
 *           
 *       Medium Priority
@@ -343,13 +342,19 @@ public class PlayArea
 
     public Room[] GetAdjacentRooms()
     {
-        if (!(CurrentRoom.Coordinates.X + 1 > GridSize.X - 1 || CurrentRoom.Coordinates.Y + 1 > GridSize.Y - 1 ||
-           CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0))
+        var roomArray = new Room[4];
+
+        if (CurrentRoom.Coordinates.X + 1 > GridSize.X - 1 || CurrentRoom.Coordinates.Y + 1 > GridSize.Y - 1 ||
+           CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0)
             return new Room[] { Grid[CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y], Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1],
                           Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y], Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1] };
 
-        // Return an empty array if the adjacent rooms are out of bounds
-        return new Room[4];
+        // Current theory is to just run through each entry in roomArray and assign it if it's valid (ie, within bounds) or leave null if not
+        // Thinking I'll add a VerifyInBounds() member to simplify these kinds of checks
+        else
+            
+
+        return roomArray;
     }
 
     // Maintained for debug purposes
