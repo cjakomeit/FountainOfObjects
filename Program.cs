@@ -7,13 +7,12 @@ GameRunner.Run();
 
 /* To Do's
 *       Blockers:
-*           Hazard and Fountain communication is inconsistent, likely an issue in GetAdjacentRooms
+*
 *       High Priority:
 *           
 *       Medium Priority
 *           
 *       Low Priority:
-*           Clean up debug text
 *       
 *       Learnings:
 *           * If I were to rewrite this whole program I'd determine how to make Hazards static and potentially even an interface. Theoretically,
@@ -23,8 +22,12 @@ GameRunner.Run();
 *           * I have a much finer understanding of the logic involved in if statements. I also picked up the habit of using guard statements.
 *           * It doesn't make sense to have the Coordinate record checking if a move is valid, that should be handled by the PlayArea class.
 *           * Doing this project was a great way to learn how to maintain and effectively refactor a large-scale, complex program.
+*           * Maelstrom Collision system could probably be handled better, as it was conceived to resolve the issue around Maelstroms not moving
+*           when expected. But I don't feel like refactoring it since I'm ready to move on to something new. And that's ok.
+*           * VerifyInBounds() should have been a PlayArea member much sooner in the process, and could probably be expanded to many other
+*           areas of the codebase.
 *       
-*       Copyright: Chandler Jakomeit, August 7th, 2024
+*       Copyright: Chandler Jakomeit, August 11th, 2024
 */
 
 public static class GameRunner
@@ -56,7 +59,7 @@ public static class GameRunner
                 // Defining CurrentRoom on outset of loop
                 playArea.FindCurrentRoom(player);
 
-                playArea.DrawPlayspace(player);  // Debug only
+                //playArea.DrawPlayspace(player);  // Debug only
 
                 // Gives player details on the room they're currently in            
                 Communicator.Communicate(player, playArea);
@@ -227,9 +230,9 @@ public class PlayArea
         CurrentRoom = Grid[0, 0];
 
         // Debug tool
-        for (int i = 0; i < GridSize.X; i++)
+        /*for (int i = 0; i < GridSize.X; i++)
             for (int j = 0; j < GridSize.Y; j++)
-                Console.WriteLine($"Room {i},{j} hazard: {Grid[i, j].HazardType}");
+                Console.WriteLine($"Room {i},{j} hazard: {Grid[i, j].HazardType}");*/
     }
 
     /// <summary>
@@ -326,34 +329,43 @@ public class PlayArea
             return;
         }
     }
-
-    public bool CheckAdjacentRoomsForHazards()
+    
+    /// <summary>
+    /// Takes a Coordinate object and checks that they 
+    /// aren't greater than the grid size (adjusted for 0-based
+    /// indexing) or less than 0 (the lowest possible coordinate).
+    /// </summary>
+    /// <param name="coordsToCheck"></param>
+    /// <returns>bool</returns>
+    private bool VerifyInBounds(Coordinate coordsToCheck)
     {
-        if(!(CurrentRoom.Coordinates.X + 1 > GridSize.X - 1 || CurrentRoom.Coordinates.Y + 1 > GridSize.Y - 1 || 
-           CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0))
-        {
-            if (Grid[CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1].HasHazard() ||
-                Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y].HasHazard() || Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1].HasHazard())
-                return true;
-        }
-        
-        return false;
+        if (coordsToCheck.X > GridSize.X - 1 || coordsToCheck.Y > GridSize.Y - 1 || coordsToCheck.X < 0 || coordsToCheck.Y < 0)
+            return false;
+
+        else return true;
     }
 
+    /// <summary>
+    /// Takes the CurrentRoom member of a PlayArea object, creates an array with
+    /// the coordinates of the 4 adjacent rooms, then verifies they're in bounds.
+    /// These in-bounds rooms are then added to the returned array.
+    /// </summary>
+    /// <returns>Room[]</returns>
     public Room[] GetAdjacentRooms()
     {
-        var roomArray = new Room[4];
+        // Initializing the adjacent rooms' coordinates to later verify if they are within bounds
+        Coordinate[] coordsToCheck = { new(CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y), new(CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y),
+                                       new(CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1), new(CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1)};
 
-        if (CurrentRoom.Coordinates.X + 1 > GridSize.X - 1 || CurrentRoom.Coordinates.Y + 1 > GridSize.Y - 1 ||
-           CurrentRoom.Coordinates.X - 1 < 0 || CurrentRoom.Coordinates.Y - 1 < 0)
-            return new Room[] { Grid[CurrentRoom.Coordinates.X + 1, CurrentRoom.Coordinates.Y], Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y + 1],
-                          Grid[CurrentRoom.Coordinates.X - 1, CurrentRoom.Coordinates.Y], Grid[CurrentRoom.Coordinates.X, CurrentRoom.Coordinates.Y - 1] };
+        // Creating an empty room array to fill with rooms that are in-bounds
+        var roomArray = new Room[4];        
 
-        // Current theory is to just run through each entry in roomArray and assign it if it's valid (ie, within bounds) or leave null if not
-        // Thinking I'll add a VerifyInBounds() member to simplify these kinds of checks
-        else
+        // Checking if each coordsToCheck value is in-bounds, then adding it to roomArray if so
+        for(int i = 0; i < roomArray.Length; i++)
+            if (VerifyInBounds(coordsToCheck[i]))
+                roomArray[i] = Grid[coordsToCheck[i].X, coordsToCheck[i].Y];
             
-
+                
         return roomArray;
     }
 
