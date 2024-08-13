@@ -37,6 +37,8 @@ public static class GameRunner
         // Immediately initializing variable for tracking user input
         Options userCommand;
 
+        var timer = new Timer();
+
         // Keeps the player in the game so that if the game ends they're automatically restarted
         do
         {
@@ -51,8 +53,11 @@ public static class GameRunner
 
             // Initializing all necessary game objects for start-up
             PlayArea playArea = new(areaSizeSelect);
-            Player player = new(playArea);      
-            
+            Player player = new(playArea);
+
+            // Start timer just before entering main gameplay loop
+            timer.StartTimer();
+
             // Start of actual gameplay loop
             do
             {
@@ -91,8 +96,6 @@ public static class GameRunner
                 // If the player's current room contains a hazard and it is of type Maelstrom, then run logic to move player
                 if (playArea.CurrentRoom.HasHazard())
                 {
-                    // Debug tool
-                    Console.WriteLine($"Hazard detected: {playArea.CurrentRoom.HazardType}");
                     // Wrapping in guard statement
                     if (playArea.CurrentRoom.HazardType == typeof(Maelstrom))
                         playArea.MaelstromCollision(player);
@@ -105,6 +108,13 @@ public static class GameRunner
             if (CheckForWin(player, playArea.Fountain)) Console.WriteLine("Congratulations! You won!");
             else if (CheckForLoss(playArea)) Console.WriteLine("Oh no! You died. GAME OVER");
             else Console.WriteLine("Thanks for playing!");
+
+            // Ending timer for a single game then reporting it to the player
+            timer.EndTimer();
+
+            // Casting TimeSpan.Minutes to an int will give the whole time in minutes, even if it exceeds an hour
+            Console.WriteLine($"You were in the Caverns for {(int)timer.TotalTime.Minutes} minutes and {timer.TotalTime.Seconds} seconds.");
+
         } while (userCommand != Options.Quit);
         
         Console.ResetColor();
@@ -248,6 +258,8 @@ public class PlayArea
         tempMaelstrom.TriggerMovePlayer(player);
 
         CurrentRoom.DestroyHazard();
+
+        Communicator.MaelstromInteraction();
     }
 
     /// <summary>
@@ -575,7 +587,7 @@ public record Coordinate(int x, int y)
         if (InvalidMoveCheck((X+x), (Y+y), playspace))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"Invalid move. ({x},{y})");
+            Console.WriteLine($"There's a wall there.");
             Console.ResetColor();
             return;
         }
@@ -613,9 +625,10 @@ public static class Communicator
                                              "  3. Toggle Fountain: If you're in the Fountain Room, this command toggles the state of the Fountain (On/Off).\n" +
                                              "  4. Help: Displays details about available commands. How you got here!\n" +
                                              "  5. Quit: Quits the game fully.";
-    private static string CurrentRoom { get; } = "Current Room: ";
+    private static string CurrentRoom { get; } = "\nCurrent Room: ";
     private static string PitNear { get; } = "You feel a foreboding draft. There is a pit in a nearby room.";
     private static string MaelstromNear { get; } = "A violent gust of wind reverberates through the cavern. There is a maelstrom in a nearby room.";
+    private static string MaelstromCollision { get; } = "Oh no! A maelstrom threw you to another room!";
     private static string AmarokNear { get; } = "The stench of rotten flesh invades your nostrils. There is an amarok in a nearby room.";
     private static string ArrowHit { get; } = "Monster killed!";
     private static string ArrowMiss { get; } = "Arrow missed!";
@@ -714,50 +727,6 @@ public static class Communicator
         Console.ResetColor();
     }
 
-    public static void ArrowShot(int ammoCount, bool shotResult)
-    {
-        if (ammoCount <= 0)
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(ArrowOut);
-            Console.ResetColor();
-        }
-
-        else if (shotResult == true)
-        {
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine(ArrowHit);
-            Console.ResetColor();
-        }
-
-        else
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(ArrowMiss);
-            Console.ResetColor();
-        }
-    }
-
-    private static Room NearestHazardRoom(PlayArea playspace)
-    {
-        foreach(Room room in playspace.GetAdjacentRooms())
-        {
-            if (room != null && room.HasHazard())
-                return room;
-        }
-
-        return playspace.CurrentRoom;
-    }
-
-    private static bool InFountainRoom(PlayArea playSpace)
-    {
-        if (playSpace.CurrentRoom.Coordinates.X == playSpace.Fountain.Coordinates.X && 
-            playSpace.CurrentRoom.Coordinates.Y == playSpace.Fountain.Coordinates.Y)
-            return true;
-
-        else return false;
-    }
-
     // Displays intro + instructions text
     public static void NarrateIntro()
     {
@@ -784,15 +753,85 @@ public static class Communicator
         return false;
     }
 
+    private static bool InFountainRoom(PlayArea playSpace)
+    {
+        if (playSpace.CurrentRoom.Coordinates.X == playSpace.Fountain.Coordinates.X &&
+            playSpace.CurrentRoom.Coordinates.Y == playSpace.Fountain.Coordinates.Y)
+            return true;
+
+        else return false;
+    }
+
+    private static Room NearestHazardRoom(PlayArea playspace)
+    {
+        foreach (Room room in playspace.GetAdjacentRooms())
+        {
+            if (room != null && room.HasHazard())
+                return room;
+        }
+
+        return playspace.CurrentRoom;
+    }
+
+    public static void ArrowShot(int ammoCount, bool shotResult)
+    {
+        if (ammoCount <= 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(ArrowOut);
+            Console.ResetColor();
+        }
+
+        else if (shotResult == true)
+        {
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine(ArrowHit);
+            Console.ResetColor();
+        }
+
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(ArrowMiss);
+            Console.ResetColor();
+        }
+    }
+
+    public static void MaelstromInteraction()
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(MaelstromCollision);
+        Console.ResetColor();
+    }
+
     public static void HelpText() => Console.WriteLine(Help);
 
     // Adds current room's coordinates to boilerplate CurrentRoom text
     public static string FindCurrentRoom(PlayArea playspace) => CurrentRoom + $"({playspace.CurrentRoom.Coordinates.X},{playspace.CurrentRoom.Coordinates.Y})";
 }
 
+public class Timer
+{
+    private DateTime TimerStart { get; set; }
+    private DateTime TimerEnd { get; set; }
+    public TimeSpan TotalTime { get; private set; }
+
+    public Timer() { }
+
+    public void StartTimer() => TimerStart = DateTime.Now;
+    
+    public void EndTimer()
+    {
+        TimerEnd = DateTime.Now;
+        TotalTime = FindTimerLength();
+    }
+
+    private TimeSpan FindTimerLength() => TimerEnd - TimerStart;
+}
+
 // Hazards //
 
-public class Hazard
+public abstract class Hazard
 {
     public Coordinate Coordinates { get; protected set; }
     public PlayArea Playarea { get; protected set; }
@@ -863,44 +902,24 @@ public class Maelstrom : Hazard
     public void TriggerMovePlayer(Player player)
     {
         foreach (IMoveCommands move in ThrowPlayerDirections)
-        {
-            Console.WriteLine($"Triggering player mover: {move}");  // Debug only
-            
             player.TriggerMoveCommand(move);
 
-            Console.WriteLine($"{move} complete");  // Debug only
-        }
-
-        // Maelstrom should always move after moving a player (Isn't triggering, see comment in Move() below)
+        // Maelstrom should always move after moving a player
         Move();
     }
 
-    // Currently not working, throwing an invalid move when attempting to update coordinates. Need to determine if newCoords is providing a bogus value,
-    // or if there's something in Coordinates.Update() that would cause it to refect newCoords values
-    // Should also clear the hazard from the room it lived in before moving, and update Room to contain it
+    // Generates some placeholder coords, then defines new coords until it finds a corresponding room that doesn't contain a Hazard already
     private void Move()
     {
         Coordinate newCoords = GenerateValidRandomCoords();
 
-        Console.WriteLine($"New coordinates for maelstrom generated: ({newCoords.x},{newCoords.y})");
-
-        // This is returning an invalid move if the maelstrom is on the edge of the arena
-        Console.WriteLine("Has hazard?" + Playarea.Grid[newCoords.x, newCoords.y].HasHazard());
-
         // If the new room for the Maelstrom already has a hazard, keep regenerating coordinates until a suitable room is found
         while (!Playarea.Grid[newCoords.x, newCoords.y].HasHazard())
         {
-            Console.WriteLine($"Checking if new room can accept hazard ({newCoords.x},{newCoords.y})");
             if (!Playarea.Grid[newCoords.x, newCoords.y].HasHazard())
-            {
                 Playarea.Grid[newCoords.x, newCoords.y].DefineRoomHazard<Maelstrom>(this);
-                Console.WriteLine($"Added maelstrom to Playarea.Grid at ({newCoords.x},{newCoords.y})");
-            }
 
-            else { 
-                newCoords = GenerateValidRandomCoords();
-            Console.WriteLine($"Generated new coords ({newCoords.x},{newCoords.y})");
-            }
+            else newCoords = GenerateValidRandomCoords();
         }
     }
 }
